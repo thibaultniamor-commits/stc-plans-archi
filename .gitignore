@@ -1,0 +1,8 @@
+# bancs d'essai construits a partir de releves reels : jamais publies
+_banc_*.html
+
+# artefacts locaux
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

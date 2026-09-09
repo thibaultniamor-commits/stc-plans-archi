@@ -1,0 +1,3849 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<title>Cibles STC — outil autonome</title>
+<style>
+/* ============================================================
+   Cibles STC — V2. Système visuel : design_stc/Systeme.v2.dc.html
+   Surfaces  #0d1220 bord · #141b33 barres · #1b2440 panneaux · #26314a champs
+             #222c48 cartes · #22345c bloc mis en avant · #151d33 groupe · #0f1730 piste
+   Texte     #eef2fb titre · #dfe6f2 texte · #b9c4da second · #9aa7bd aide · #7f8bab label
+   Accents   #1e6fd9 principal · #3b82f6 focus · #f0a500 avertissement · #c0392b destructif
+   Espaces   4 · 6 · 8 · 12 · 16 · 24     Hauteurs 24 · 28 · 30 · 34 · 40 · 42 · 46
+   ============================================================ */
+:root{
+  --bord:#0d1220; --barre:#141b33; --panneau:#1b2440; --champ:#26314a;
+  --carte:#222c48; --avant:#22345c; --groupe:#151d33; --piste:#0f1730;
+  --titre:#eef2fb; --texte:#dfe6f2; --second:#b9c4da; --aide:#9aa7bd; --label:#7f8bab;
+  --acc:#1e6fd9; --focus:#3b82f6; --warn:#f0a500; --dest:#c0392b;
+  --lien:#8ab4ff; --ok:#8fb98f; --okfond:#2e7d52; --err:#ff9a92;
+  --bd:rgba(255,255,255,.09); --bd2:rgba(255,255,255,.18); --bd3:rgba(255,255,255,.34);
+  --sep:rgba(255,255,255,.08);
+  font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+}
+*,*::before,*::after{ box-sizing:border-box; }
+body{ margin:0; height:100vh; overflow:hidden; background:var(--barre); color:var(--texte);
+  font-size:12.5px; -webkit-font-smoothing:antialiased; }
+.ico{ display:block; flex:none; }
+.num{ font-variant-numeric:tabular-nums; }
+.muted{ color:var(--aide); font-size:11.5px; line-height:1.55; }
+.colh{ color:var(--label); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; }
+a{ color:var(--lien); } a:hover{ color:#a9c8ff; }
+h1{ font-size:19px; font-weight:600; letter-spacing:-.01em; color:var(--titre); margin:0; }
+h2{ font-size:15px; font-weight:600; color:var(--titre); margin:16px 0 8px; }
+h3{ font-size:13.5px; font-weight:600; color:var(--titre); margin:0; }
+
+/* ---------- controles : un style par role, quatre etats ---------- */
+button,select,input{ font-family:inherit; font-size:12.5px; }
+button{ cursor:pointer; height:30px; padding:0 12px; border:0; border-radius:4px;
+  background:var(--acc); color:#fff; font-weight:600; display:inline-flex;
+  align-items:center; justify-content:center; gap:6px; white-space:nowrap; }
+button:hover{ background:var(--focus); }
+button.sec{ background:transparent; color:var(--texte); border:1px solid var(--bd2); font-weight:400; }
+button.sec:hover{ border-color:var(--bd3); background:rgba(255,255,255,.05); color:#fff; }
+button.warn{ background:transparent; color:var(--err); border:1px solid rgba(192,57,43,.55); font-weight:400; }
+button.warn:hover{ background:var(--dest); color:#fff; border-color:var(--dest); }
+button:disabled{ color:#5a657f; background:transparent;
+  border:1px solid var(--bd2); cursor:default; }
+button:disabled:hover{ background:transparent; border-color:var(--bd2); color:#5a657f; }
+:focus-visible{ outline:none; box-shadow:0 0 0 2px var(--panneau),0 0 0 4px var(--focus); }
+select,input[type=text],input[type=number]{ height:28px; padding:0 8px; background:var(--champ);
+  color:var(--titre); border:1px solid rgba(255,255,255,.22); border-radius:4px; }
+select:focus,input:focus{ outline:none; border-color:var(--focus);
+  box-shadow:0 0 0 2px rgba(59,130,246,.25); }
+input[type=range]{ accent-color:var(--acc); vertical-align:middle; }
+.chip{ display:inline-flex; align-items:center; height:24px; padding:0 8px; border-radius:12px;
+  color:#fff; font-size:11.5px; font-weight:600; white-space:nowrap; flex:none; }
+.card{ background:var(--carte); border:1px solid var(--bd); border-radius:6px; }
+.kbd{ font-size:10.5px; color:var(--label); border:1px solid rgba(255,255,255,.16);
+  border-radius:3px; padding:0 4px; line-height:14px; }
+
+/* ---------- accueil ---------- */
+#accueil{ display:flex; flex-direction:column; height:100vh; background:var(--barre); }
+#acc_bar{ flex:0 0 46px; display:flex; align-items:center; gap:12px; padding:0 16px;
+  border-bottom:1px solid var(--bord); }
+#acc_scroll{ flex:1; overflow-y:auto; display:flex; justify-content:center; padding:24px 16px; }
+#acc_box{ width:100%; max-width:1180px; display:flex; gap:24px; align-items:flex-start; }
+#acc_main{ flex:1 1 720px; min-width:0; display:flex; flex-direction:column; gap:16px; }
+#acc_aside{ flex:0 0 316px; display:flex; flex-direction:column; gap:16px; }
+#acc_foot{ flex:0 0 30px; display:flex; align-items:center; gap:12px; padding:0 16px;
+  background:var(--piste); border-top:1px solid var(--bord); color:var(--label); font-size:11.5px; }
+.step{ width:24px; height:24px; border-radius:12px; display:flex; align-items:center;
+  justify-content:center; font-size:11.5px; font-weight:700; flex:none;
+  background:var(--acc); color:#fff; }
+.step.done{ background:var(--okfond); }
+.stephd{ display:flex; align-items:center; gap:8px; }
+#drop,#drop2{ border:1.5px dashed rgba(255,255,255,.22); border-radius:6px; padding:24px;
+  text-align:center; color:var(--aide); cursor:pointer; }
+#drop2{ padding:16px; }
+#drop.hov,#drop2.hov{ border-color:var(--focus); color:var(--lien); background:rgba(59,130,246,.08); }
+#vignettes{ display:flex; flex-wrap:wrap; gap:8px; max-height:320px; overflow-y:auto; }
+#vignettes .pg{ width:92px; border:2px solid rgba(255,255,255,.12); border-radius:5px; padding:4px;
+  cursor:pointer; text-align:center; font-size:10.5px; color:var(--aide); background:var(--panneau); }
+#vignettes .pg.on{ border-color:var(--acc); background:var(--avant); color:var(--titre); font-weight:600; }
+#vignettes canvas{ display:block; width:100%; height:auto; border-radius:2px; background:#f2f3f5; }
+#acc_status{ color:var(--aide); font-size:11.5px; min-height:18px; }
+#acc_status.err{ color:var(--err); }
+#pdfinfo{ display:flex; align-items:center; gap:12px; padding:12px; background:var(--avant);
+  border:1px solid rgba(59,130,246,.35); border-radius:6px; }
+
+/* ---------- ossature application ---------- */
+#approot{ display:none; height:100vh; flex-direction:column; }
+#topnav{ flex:0 0 46px; display:flex; align-items:center; gap:12px; padding:0 12px;
+  background:var(--barre); border-bottom:1px solid var(--bord); }
+#brand{ display:flex; align-items:center; gap:8px; font-weight:600; color:var(--titre);
+  font-size:15px; white-space:nowrap; }
+#projchip{ display:flex; align-items:center; gap:6px; height:24px; padding:0 8px;
+  background:var(--panneau); border:1px solid rgba(255,255,255,.10); border-radius:12px;
+  max-width:380px; overflow:hidden; }
+#projchip #titre{ color:var(--texte); white-space:nowrap; flex:0 1 auto;
+  overflow:hidden; text-overflow:ellipsis; }
+#projchip #srvinfo{ color:var(--label); font-size:11.5px; white-space:nowrap; flex:none; }
+#ruban{ display:flex; gap:4px; background:var(--panneau); border-radius:6px; padding:4px; }
+button.nav{ height:28px; padding:0 12px; border-radius:4px; background:transparent;
+  color:var(--second); font-weight:400; }
+button.nav:hover{ background:rgba(255,255,255,.06); color:#fff; }
+button.nav.on{ background:#2a3a63; color:#fff; font-weight:600; }
+#savestate{ display:flex; align-items:center; gap:6px; color:var(--ok); font-size:11.5px;
+  white-space:nowrap; }
+.menuwrap{ position:relative; }
+.menu{ position:absolute; top:36px; right:0; min-width:250px; z-index:40; padding:6px;
+  background:var(--carte); border:1px solid var(--bd); border-radius:6px;
+  box-shadow:0 10px 24px rgba(0,0,0,.45); display:none; flex-direction:column; gap:2px; }
+.menu.on{ display:flex; }
+.menu button{ height:30px; justify-content:flex-start; background:transparent; color:var(--texte);
+  font-weight:400; width:100%; }
+.menu button:hover{ background:rgba(255,255,255,.07); }
+.menu .muted{ padding:6px 12px 4px; }
+.menu hr{ border:0; border-top:1px solid var(--sep); margin:4px 0; }
+
+/* ---------- barre d'outils ---------- */
+#ws{ flex:1; min-height:0; }
+#ws_plan{ display:flex; height:100%; }
+#col{ flex:1; display:flex; flex-direction:column; min-width:0; }
+#zoombar{ flex:0 0 42px; display:flex; align-items:center; gap:8px; padding:0 12px;
+  background:var(--panneau); border-bottom:1px solid var(--bord); position:relative;
+  overflow:hidden; }
+/* la barre se degarnit avant de deborder : d'abord les raccourcis, puis les
+   libelles des outils — les infobulles et l'aide clavier les portent toujours. */
+@media (max-width:1640px){ #zoombar .kbd{ display:none; } }
+@media (max-width:1420px){
+  #zoombar .tgrp.ex .tbtn{ width:28px; padding:0; justify-content:center; }
+  #zoombar .tgrp.ex .tbtn span:not(.dot){ display:none; }
+}
+.tgrp{ display:flex; align-items:center; gap:4px; }
+.tgrp.ex{ background:var(--groupe); border-radius:5px; padding:4px; }
+.dvd{ width:1px; height:20px; background:rgba(255,255,255,.13); flex:none; }
+button.tbtn{ height:28px; padding:0 8px; border-radius:4px; background:transparent;
+  color:var(--second); border:1px solid transparent; font-weight:400; gap:6px; }
+button.tbtn:hover{ background:rgba(255,255,255,.07); color:#fff; }
+button.tbtn.on{ background:var(--acc); color:#fff; border-color:var(--acc); }
+button.tbtn.on:hover{ background:var(--focus); }
+button.tbtn.on .kbd{ color:#cfe0ff; border-color:rgba(255,255,255,.4); }
+button.tbtn.gh{ border-color:rgba(255,255,255,.16); color:var(--texte); }
+button.tbtn.ic{ width:28px; padding:0; }
+button.tbtn:disabled{ color:#5a657f; border-color:transparent; background:transparent; }
+.dot{ width:8px; height:8px; border-radius:2px; flex:none; }
+#zoomval{ min-width:48px; text-align:center; color:var(--titre); font-variant-numeric:tabular-nums; }
+.pop{ position:absolute; top:38px; width:272px; padding:12px; z-index:30;
+  background:var(--carte); border:1px solid var(--bd); border-radius:6px;
+  box-shadow:0 10px 24px rgba(0,0,0,.45); display:none; }
+.pop.on{ display:block; }
+
+/* ---------- plan ---------- */
+#plan{ flex:1; overflow:auto; position:relative; background:#f2f3f5; }
+#wrap{ position:relative; }
+#wrap img{ display:block; width:100%; }
+#ov{ position:absolute; inset:0; width:100%; height:100%; }
+.seg{ cursor:pointer; } .seg:hover{ stroke-width:7; }
+.room{ fill:transparent; }
+.room.clickable{ cursor:pointer; }
+.room.clickable:hover{ fill:rgba(30,120,255,.12); }
+.room.sel{ fill:rgba(30,120,255,.22); }
+.room.zoned{ fill-opacity:.3; }
+.room.zoned.clickable:hover{ fill-opacity:.45; }
+.room.zoned.sel{ fill-opacity:.55; stroke:#1e6fd9; stroke-width:2; }
+.lbl{ cursor:pointer; user-select:none; }
+.hnd{ fill:#fff; stroke:#1e6fd9; stroke-width:1.5; cursor:grab; }
+.hnd.vx{ fill:#1e6fd9; }
+.excl{ opacity:.25; stroke-dasharray:6 5; }
+
+/* ---------- barre d'etat ---------- */
+#statusbar{ flex:0 0 28px; display:flex; align-items:center; gap:12px; padding:0 12px;
+  background:var(--barre); border-top:1px solid var(--bord); color:var(--aide);
+  font-size:11.5px; overflow:hidden; }
+#hint{ display:flex; align-items:center; gap:6px; color:#cfd8ea; min-width:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#sb_stats{ display:flex; align-items:center; gap:8px; white-space:nowrap;
+  font-variant-numeric:tabular-nums; }
+#sb_xy:not(:empty){ white-space:nowrap; }
+#sb_xy:not(:empty)::before{ content:'·'; color:#3d4763; margin-right:8px; }
+#sb_stats i{ color:#3d4763; font-style:normal; }
+
+/* ---------- panneau lateral ---------- */
+#side{ flex:0 0 360px; display:flex; flex-direction:column; background:var(--panneau);
+  border-left:1px solid var(--bord); min-height:0; }
+#sidetabs{ flex:0 0 40px; display:flex; align-items:center; gap:4px; padding:0 8px;
+  border-bottom:1px solid var(--sep); }
+button.ptab{ height:28px; padding:0 12px; border-radius:4px; background:transparent;
+  color:var(--second); font-weight:400; }
+button.ptab:hover{ background:rgba(255,255,255,.06); color:#fff; }
+button.ptab.on{ background:var(--acc); color:#fff; font-weight:600; }
+button.ptab .cnt{ background:rgba(255,255,255,.10); border-radius:8px; padding:0 6px;
+  font-size:10.5px; color:var(--aide); }
+button.ptab.on .cnt{ color:#cfe0ff; }
+#sidebody{ flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:12px; }
+#sidefoot{ flex:none; padding:8px 12px 12px; border-top:1px solid var(--sep); }
+.sechd{ display:flex; align-items:center; justify-content:space-between; gap:8px;
+  height:34px; padding:0 12px; color:var(--titre); font-size:12.5px; font-weight:600; }
+.fold>.sechd{ cursor:pointer; user-select:none; }
+.fold>.sechd .chev{ transition:transform .12s; }
+.fold.open>.sechd .chev{ transform:rotate(180deg); }
+.fold>.foldbody{ display:none; padding:0 12px 12px; }
+.fold.open>.foldbody{ display:block; }
+.item{ display:flex; align-items:center; gap:8px; padding:6px 8px; background:var(--panneau);
+  border-radius:4px; }
+.conf-row{ display:flex; align-items:center; gap:8px; padding:6px 8px; background:var(--panneau);
+  border-left:2px solid var(--warn); border-radius:0 4px 4px 0; cursor:pointer; }
+.conf-row:hover{ background:var(--avant); }
+.conf-row.on{ background:var(--avant); border-left-color:var(--focus); }
+.conf-row.bad{ border-left-color:var(--dest); }
+.conf-act{ color:var(--label); font-size:10.5px; white-space:nowrap; }
+.conf-row:hover .conf-act,.conf-row.on .conf-act{ color:var(--lien); }
+.stat{ flex:1; background:var(--panneau); border-radius:5px; padding:8px; }
+.stat b{ display:block; color:var(--titre); font-size:19px; font-weight:600; line-height:1;
+  font-variant-numeric:tabular-nums; }
+.catbtn{ display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 8px;
+  border-radius:12px; font-size:11.5px; background:var(--champ); color:var(--second);
+  border:0; font-weight:400; }
+.catbtn i{ width:8px; height:8px; border-radius:2px; display:block; }
+.catbtn.on{ font-weight:600; }
+.segbtn{ flex:1; height:30px; border-radius:4px; background:var(--champ); color:var(--second);
+  font-weight:400; font-variant-numeric:tabular-nums; padding:0; }
+.segbtn.on{ background:var(--acc); color:#fff; font-weight:600; }
+#side table{ border-collapse:collapse; font-size:11px; width:100%; }
+#side td,#side th{ border:1px solid rgba(255,255,255,.16); padding:2px 4px; text-align:center; }
+#side td input{ width:34px; height:22px; padding:0; text-align:center; border-radius:2px; }
+#side .sel-actions{ display:flex; gap:8px; margin-top:12px; }
+#side .sel-actions button{ height:28px; }
+
+/* ---------- ecrans pleine page ---------- */
+.wsfull{ height:100%; overflow-y:auto; padding:24px; background:var(--barre); color:var(--texte); }
+.wsfull table{ border-collapse:collapse; font-size:11.5px; }
+.wsfull td,.wsfull th{ border:1px solid rgba(255,255,255,.16); padding:3px 8px; }
+.calcpage{ display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap; max-width:1400px; }
+.calc-left{ flex:1 1 560px; min-width:340px; max-width:660px; display:flex;
+  flex-direction:column; gap:12px; }
+.calc-right{ flex:1 1 480px; min-width:340px; display:flex; flex-direction:column; gap:12px; }
+#calc_tab{ width:100%; border-collapse:collapse; }
+#calc_tab th{ color:var(--label); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+  font-weight:600; text-align:left; border:0; border-bottom:1px solid var(--sep); padding:8px 12px; }
+#calc_tab td{ border:0; border-bottom:1px solid var(--sep); padding:8px 12px; }
+#calc_tab tr:last-child td{ border-bottom:0; }
+#calc_tab tr.weak td{ background:rgba(240,165,0,.07); }
+#calc_tab tr.weak td:first-child{ box-shadow:inset 3px 0 0 var(--warn); }
+#calc_tab tr.weak input{ border-color:rgba(240,165,0,.5); }
+#calc_tab input{ height:28px; }
+#calc_tab input.n{ width:76px; text-align:right; }
+#calc_tab input.s{ width:56px; text-align:right; }
+#calc_tab input.t{ width:100%; min-width:120px; }
+.bar{ height:6px; border-radius:3px; background:var(--groupe); overflow:hidden; min-width:64px;
+  flex:1; }
+.bar>span{ display:block; height:6px; }
+.share{ display:flex; align-items:center; gap:8px; width:150px; }
+.share em{ font-style:normal; color:var(--aide); font-size:11.5px; width:46px; text-align:right;
+  font-variant-numeric:tabular-nums; }
+.share.w em{ color:var(--warn); font-weight:600; }
+#calc_res{ padding:16px; background:var(--avant); border:1px solid rgba(59,130,246,.28);
+  border-radius:6px; }
+.bigres{ color:#fff; font-size:44px; font-weight:600; line-height:1; letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums; }
+.verdict{ display:inline-flex; align-items:center; gap:8px; height:34px; padding:0 12px;
+  border-radius:17px; font-size:12.5px; font-weight:600; font-variant-numeric:tabular-nums; }
+.verdict.bad{ background:rgba(192,57,43,.16); border:1px solid rgba(192,57,43,.55); color:var(--err); }
+.verdict.ok{ background:rgba(46,125,82,.18); border:1px solid rgba(46,125,82,.6); color:var(--ok); }
+.advice{ display:flex; align-items:flex-start; gap:8px; margin-top:16px; padding:12px;
+  background:rgba(0,0,0,.18); border-radius:5px; line-height:1.5; }
+#calc_chart svg{ width:100%; height:auto; display:block; }
+.preset{ display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 8px;
+  border-radius:12px; background:var(--champ); color:var(--second); font-size:11.5px;
+  border:0; font-weight:400; }
+#tabdoc{ max-width:900px; }
+#tabdoc h2{ color:#5b9dff; }
+.reftab th{ background:var(--champ); color:var(--titre); text-align:left; }
+.reftab td{ text-align:left; }
+.refmat td,.refmat th{ padding:4px 7px; font-size:11px; color:#fff; text-align:center; }
+.refmat td.h,.refmat th{ background:var(--champ); color:var(--titre); font-weight:600; }
+.refmat td.h{ text-align:left; }
+
+/* ---------- aide clavier ---------- */
+#kbdlay{ position:fixed; inset:0; z-index:80; background:rgba(13,18,32,.62);
+  display:none; align-items:center; justify-content:center; }
+#kbdlay.on{ display:flex; }
+#kbdbox{ width:440px; max-width:92vw; padding:16px; background:var(--carte);
+  border:1px solid var(--bd); border-radius:6px; box-shadow:0 16px 40px rgba(0,0,0,.5); }
+#kbdbox dl{ display:grid; grid-template-columns:auto 1fr; gap:6px 12px; align-items:center;
+  margin:12px 0 0; }
+#kbdbox dt{ justify-self:start; }
+#kbdbox dd{ margin:0; color:var(--aide); font-size:11.5px; }
+
+/* ---------- notification ---------- */
+#toast{ position:fixed; left:50%; bottom:44px; transform:translateX(-50%); z-index:70;
+  display:none; align-items:center; gap:8px; padding:12px; min-width:280px;
+  background:var(--carte); border-left:3px solid var(--acc); border-radius:0 5px 5px 0;
+  box-shadow:0 10px 24px rgba(0,0,0,.45); }
+#toast.on{ display:flex; }
+#toast.ok{ border-left-color:var(--okfond); }
+#toast.warn{ border-left-color:var(--warn); }
+</style></head><body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<g id="i-logo"><path d="M3 20V6l7-3v17"/><path d="M10 20h11V11l-6-2"/><path d="M14 20v-5"/></g>
+<g id="i-plan"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M3 9h18M9 21V9"/></g>
+<g id="i-calc"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h3M8 15h3M15 11v5"/></g>
+<g id="i-doc"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M9 8h7"/></g>
+<g id="i-sel"><path d="m4 3 7 17 2.5-6.5L20 11z"/></g>
+<g id="i-wall"><path d="M4 18 20 6"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="6" r="2"/></g>
+<g id="i-room"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 11h9v9"/></g>
+<g id="i-door"><path d="M4 20h16"/><path d="M6 20V6h8v14"/><path d="M14 6a8 8 0 0 1 6 8v6"/></g>
+<g id="i-scale"><path d="m3 15 12-12 6 6-12 12z"/><path d="M8 10l2 2M11 7l2 2M5 13l2 2"/></g>
+<g id="i-minus"><path d="M5 12h14"/></g>
+<g id="i-plus"><path d="M12 5v14M5 12h14"/></g>
+<g id="i-fit"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6"/></g>
+<g id="i-undo"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></g>
+<g id="i-redo"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></g>
+<g id="i-weld"><path d="M3 7h7M14 7h7M3 17h7M14 17h7"/><path d="M10 4v6M14 14v6"/></g>
+<g id="i-menu"><path d="M4 6h16M4 12h16M4 18h10"/></g>
+<g id="i-save"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 21v-8h10v8M7 3v5h8"/></g>
+<g id="i-export"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></g>
+<g id="i-chev"><path d="m6 9 6 6 6-6"/></g>
+<g id="i-check"><path d="M20 6 9 17l-5-5"/></g>
+<g id="i-alert"><path d="M12 9v5M12 17h.01"/><path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></g>
+<g id="i-info"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></g>
+<g id="i-clock"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></g>
+<g id="i-grid"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M3 9h18M9 3v18"/></g>
+<g id="i-layers"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></g>
+<g id="i-list"><path d="M4 6h16M4 12h16M4 18h16"/></g>
+<g id="i-file"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></g>
+<g id="i-folder"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-7l-2-2H5a2 2 0 0 0-2 2z"/></g>
+<g id="i-lock"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></g>
+<g id="i-bulb"><path d="M12 3v3M12 18v3M5 12H2M22 12h-3M6 6 4 4M20 20l-2-2M6 18l-2 2M20 4l-2 2"/><circle cx="12" cy="12" r="3.5"/></g>
+<g id="i-close"><path d="M18 6 6 18M6 6l12 12"/></g>
+<g id="i-back"><path d="M19 12H5M11 6l-6 6 6 6"/></g>
+<g id="i-stairs"><path d="M4 20h4v-4h4v-4h4V8h4"/></g>
+</defs></svg>
+
+<div id="accueil">
+<div id="acc_bar">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-logo"/></svg>
+  <span style="font-weight:600;color:var(--titre);font-size:15px">Cibles STC</span>
+  <span class="muted">Analyse acoustique d'un plan d'architecture</span>
+  <div style="flex:1"></div>
+  <span style="display:flex;align-items:center;gap:6px;color:var(--ok);font-size:11.5px">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" class="ico"><use href="#i-lock"/></svg>
+    100 % hors-ligne — rien ne quitte votre poste</span>
+  <button class="sec" style="width:28px;height:28px;padding:0" onclick="aideClavier(true)" title="Raccourcis clavier (?)">?</button>
+</div>
+
+<div id="acc_scroll"><div id="acc_box">
+ <div id="acc_main">
+
+  <div>
+    <div style="color:var(--titre);font-size:22px;font-weight:600;letter-spacing:-.01em">Nouveau relevé de cibles STC</div>
+    <div class="muted" style="margin-top:4px">Trois étapes : déposer le PDF vectoriel exporté de la CAO, choisir la page, lancer l'analyse.</div>
+  </div>
+
+  <div class="card" style="padding:16px">
+    <div class="stephd">
+      <span class="step" id="step1">1</span>
+      <h3>Plan PDF</h3>
+      <div style="flex:1"></div>
+      <button class="sec" id="btnchangepdf" style="height:28px;display:none" onclick="document.getElementById('fpdf').click()">Changer de fichier</button>
+    </div>
+    <div style="margin-top:12px">
+      <div id="drop">Glissez le PDF ici, ou cliquez pour choisir un fichier
+        <input type="file" id="fpdf" accept=".pdf" style="display:none"></div>
+      <div id="pdfinfo" style="display:none">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8ab4ff" stroke-width="1.5" stroke-linecap="round" class="ico"><use href="#i-file"/></svg>
+        <div style="flex:1;min-width:0">
+          <div id="pdfnom" style="color:var(--titre);font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+          <div class="muted" id="pdfmeta"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="card_page" style="padding:16px;display:none">
+    <div class="stephd">
+      <span class="step">2</span>
+      <h3>Page à analyser</h3>
+      <span class="muted">— un niveau par page</span>
+      <div style="flex:1"></div>
+      <span class="muted" id="pagesel">—</span>
+    </div>
+    <div style="margin-top:12px"><div id="vignettes"></div></div>
+  </div>
+
+  <div class="card" id="acc_params" style="padding:16px;display:none">
+    <div class="stephd">
+      <span class="step">3</span>
+      <h3>Réglages d'analyse</h3>
+      <div style="flex:1"></div>
+      <span class="muted">Modifiables ensuite sans repartir de zéro</span>
+    </div>
+    <div style="display:flex;gap:24px;margin-top:16px;align-items:flex-start;flex-wrap:wrap">
+      <div style="width:232px">
+        <div style="color:var(--texte);margin-bottom:6px">Échelle du plan</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="muted" style="font-size:12.5px">1 /</span>
+          <input type="number" id="echelle" value="100" min="20" max="500" style="width:76px;text-align:center">
+          <button class="preset" onclick="document.getElementById('echelle').value=50">50</button>
+          <button class="preset" onclick="document.getElementById('echelle').value=200">200</button>
+        </div>
+        <div class="muted" style="margin-top:6px">Ou calibrez à l'écran en cliquant deux points d'une cote connue.</div>
+      </div>
+      <div style="flex:1;min-width:280px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <span style="color:var(--texte)">Finesse de détection</span>
+          <span style="color:var(--titre);font-weight:600"><b id="fval">4</b> — <span id="fmot">équilibré</span></span>
+        </div>
+        <input type="range" id="finesse" min="1" max="9" value="4" style="width:100%;margin-top:12px"
+          oninput="majFinesse(this.value)">
+        <div style="display:flex;justify-content:space-between;margin-top:6px;gap:12px">
+          <span class="muted">1 — ne colmate que les fines ouvertures</span>
+          <span class="muted" style="text-align:right">9 — colmate large, risque d'effacer les petits locaux</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--sep)">
+      <button id="btnanalyser" style="height:36px;font-size:13.5px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="ico"><use href="#i-check"/></svg>
+        <span id="btnanalyser_txt">Analyser la page</span></button>
+      <span class="muted">L'analyse se fait sur votre poste ; vous pourrez la relancer avec une autre finesse depuis le plan.</span>
+    </div>
+  </div>
+
+  <div id="acc_status"></div>
+ </div>
+
+ <div id="acc_aside">
+  <div class="card" style="padding:16px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8ab4ff" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-folder"/></svg>
+      <h3>Reprendre un projet</h3>
+    </div>
+    <div class="muted" style="margin-top:8px">Déposez une sauvegarde <b style="color:var(--texte)">…_STC.html</b> ou un projet <b style="color:var(--texte)">…_projet_STC.json</b>.</div>
+    <div id="drop2" style="margin-top:12px">Glisser ici, ou <span style="color:var(--lien)">parcourir</span>
+      <input type="file" id="fprj" accept=".html,.json" style="display:none"></div>
+  </div>
+
+  <div class="card" style="padding:16px">
+    <h3>Ce qui donne un bon résultat</h3>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+      <div style="display:flex;gap:8px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8fb98f" stroke-width="2.2" stroke-linecap="round" class="ico" style="margin-top:2px"><use href="#i-check"/></svg>
+        <span class="muted">Un PDF <b style="color:var(--texte)">vectoriel</b> exporté de la CAO — pas un scan ni une image.</span></div>
+      <div style="display:flex;gap:8px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8fb98f" stroke-width="2.2" stroke-linecap="round" class="ico" style="margin-top:2px"><use href="#i-check"/></svg>
+        <span class="muted">Les <b style="color:var(--texte)">numéros et noms de locaux</b> présents sur le plan.</span></div>
+      <div style="display:flex;gap:8px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8fb98f" stroke-width="2.2" stroke-linecap="round" class="ico" style="margin-top:2px"><use href="#i-check"/></svg>
+        <span class="muted">Une <b style="color:var(--texte)">cote connue</b> sur le plan pour caler l'échelle si le 1/100 n'est pas exact.</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;background:var(--avant);border-color:rgba(59,130,246,.3)">
+    <div style="display:flex;align-items:center;gap:8px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8ab4ff" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-info"/></svg>
+      <span style="color:var(--titre);font-weight:600">Sans PDF sous la main ?</span>
+    </div>
+    <div class="muted" style="margin-top:6px">Les onglets Calculateur STCc et Bonnes pratiques s'ouvrent sans plan chargé.</div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="sec" style="height:28px" onclick="ouvrirSansPlan('calc')">Calculateur</button>
+      <button class="sec" style="height:28px" onclick="ouvrirSansPlan('doc')">Bonnes pratiques</button>
+    </div>
+  </div>
+ </div>
+</div></div>
+
+<div id="acc_foot">
+  <span>Aucun serveur, aucune connexion — le fichier reste sur votre poste.</span>
+  <div style="flex:1"></div>
+  <span>Version 2 · LEED v4 · WELL v2 · ANSI/ASA S12.60 · CNB 2020</span>
+</div>
+</div>
+
+<div id="approot">
+
+<div id="topnav">
+  <span id="brand">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-logo"/></svg>
+    Cibles STC</span>
+  <span id="projchip"><span id="titre"></span><span id="srvinfo"></span></span>
+
+  <div id="ruban">
+    <button class="nav on" id="nav_plan" onclick="setView('plan')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" class="ico"><use href="#i-plan"/></svg>Plan</button>
+    <button class="nav" id="nav_calc" onclick="setView('calc')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" class="ico"><use href="#i-calc"/></svg>Calculateur STCc</button>
+    <button class="nav" id="nav_doc" onclick="setView('doc')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" class="ico"><use href="#i-doc"/></svg>Bonnes pratiques</button>
+  </div>
+
+  <div style="flex:1"></div>
+
+  <span id="savestate" style="visibility:hidden">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="ico"><use href="#i-check"/></svg>
+    <span id="savetxt"></span></span>
+  <button id="btnsavehtml" onclick="saveHTML()" title="Sauver le projet (Ctrl+S)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-save"/></svg>Sauver</button>
+  <div class="menuwrap">
+    <button class="sec" onclick="basculerMenu('m_exp',event)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-export"/></svg>Exporter
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" class="ico"><use href="#i-chev"/></svg></button>
+    <div class="menu" id="m_exp">
+      <div class="muted colh">Le plan</div>
+      <button onclick="fermerMenus();expJPG()">Image JPG</button>
+      <button onclick="fermerMenus();expPPT()">PowerPoint — formes éditables</button>
+      <button onclick="fermerMenus();expDXF()">DXF — cloisons par calque STC</button>
+      <hr>
+      <div class="muted colh">Les données</div>
+      <button onclick="fermerMenus();expCSV()">CSV des cloisons</button>
+      <button onclick="fermerMenus();expQtyCSV()">CSV du métré par cible</button>
+      <button onclick="fermerMenus();expJSON()">JSON de validation</button>
+      <hr>
+      <button onclick="fermerMenus();document.getElementById('fimp').click()">Recharger un JSON de validation…</button>
+      <input type="file" id="fimp" accept=".json" style="display:none" onchange="impJSON(event)">
+    </div>
+  </div>
+  <button class="sec" style="width:30px;padding:0" onclick="aideClavier(true)" title="Raccourcis clavier (?)">?</button>
+</div>
+
+<div id="ws">
+<div id="ws_plan">
+<div id="col">
+
+<div id="zoombar">
+  <div class="tgrp">
+    <button class="tbtn ic" onclick="zoom(0.8)" title="Dézoomer">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="ico"><use href="#i-minus"/></svg></button>
+    <span id="zoomval">100 %</span>
+    <button class="tbtn ic" onclick="zoom(1.25)" title="Zoomer">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="ico"><use href="#i-plus"/></svg></button>
+    <button class="tbtn ic" onclick="zoomFit()" title="Ajuster le plan à la fenêtre">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-fit"/></svg></button>
+  </div>
+
+  <div class="dvd"></div>
+
+  <div class="tgrp ex">
+    <button class="tbtn on" id="m_select" onclick="setMode('select')" title="Sélectionner et éditer (V)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" class="ico"><use href="#i-sel"/></svg>Sélection <span class="kbd">V</span></button>
+    <button class="tbtn" id="m_add" onclick="setMode('add')" title="Tracer une cloison (C)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-wall"/></svg>Cloison <span class="kbd">C</span></button>
+    <button class="tbtn" id="m_rooms" onclick="setMode('rooms')" title="Éditer le contour des pièces (P)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="ico"><use href="#i-room"/></svg>Pièce <span class="kbd">P</span></button>
+    <button class="tbtn" id="m_addroom" onclick="setMode('addroom')" title="Tracer un nouvel espace (N)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-plus"/></svg>Espace <span class="kbd">N</span></button>
+    <button class="tbtn" id="m_addporte" onclick="setMode('addporte')" title="Poser une porte (D)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-door"/></svg>Porte <span class="kbd">D</span></button>
+    <button class="tbtn" id="m_calib" onclick="setMode('calib')" title="Calibrer l'échelle sur une cote connue (M)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-scale"/></svg>Échelle <span class="kbd">M</span></button>
+  </div>
+
+  <div class="dvd"></div>
+
+  <div class="tgrp">
+    <button class="tbtn gh" id="m_zone" onclick="setZonage(!zonage)" title="Colorer les pièces par catégorie">
+      <span class="dot" id="dot_zone" style="border:1.5px solid #7f8bab"></span>Zonage</button>
+    <button class="tbtn gh on" id="m_portes" onclick="setPortes(!portes_aff)" title="Afficher les portes">
+      <span class="dot" id="dot_portes" style="background:#fff"></span>Portes</button>
+  </div>
+
+  <div class="dvd"></div>
+
+  <div class="tgrp">
+    <button class="tbtn ic" id="btn_undo" onclick="undo()" title="Annuler (Ctrl+Z)" disabled>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="ico"><use href="#i-undo"/></svg></button>
+    <button class="tbtn ic" id="btn_redo" onclick="redo()" title="Rétablir (Ctrl+Y)" disabled>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="ico"><use href="#i-redo"/></svg></button>
+  </div>
+
+  <div style="flex:1"></div>
+
+  <button class="tbtn gh" id="btn_autoconnect" onclick="basculerMenu('pop_ac',event)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-weld"/></svg>Auto-connexion
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" class="ico"><use href="#i-chev"/></svg></button>
+  <div class="menuwrap">
+    <button class="tbtn gh" onclick="basculerMenu('m_page',event)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-menu"/></svg>Page / PDF</button>
+    <div class="menu" id="m_page">
+      <div id="srvctl" style="display:none">
+        <div class="muted colh">Relancer l'analyse de cette page</div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 12px 8px">
+          <span class="muted">finesse</span>
+          <input type="range" id="srv_f" min="1" max="9" value="4" style="flex:1"
+            oninput="document.getElementById('srv_fv').textContent=this.value">
+          <b id="srv_fv" class="num" style="color:var(--titre)">4</b>
+        </div>
+        <button onclick="fermerMenus();relancer()">Relancer l'analyse</button>
+        <hr>
+      </div>
+      <button onclick="fermerMenus();retourAccueil()">Changer de page / de PDF</button>
+      <div class="muted" style="padding:4px 12px 6px">Le travail en cours reste chargé tant que vous ne relancez pas d'analyse.</div>
+    </div>
+  </div>
+
+  <div class="pop" id="pop_ac" style="right:150px">
+    <h3>Tolérance de soudure</h3>
+    <div class="muted" style="margin-top:4px">Deux extrémités plus proches que cette distance sont alignées puis fusionnées. Les cloisons sont d'abord redressées à l'horizontale ou à la verticale.</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+      <input type="range" id="ac_tol" min="2" max="40" value="15" style="flex:1"
+        oninput="document.getElementById('ac_tolv').textContent=this.value">
+      <span class="num" style="width:64px;height:28px;background:var(--champ);border:1px solid rgba(255,255,255,.22);border-radius:4px;display:flex;align-items:center;justify-content:center"><b id="ac_tolv">15</b>&nbsp;cm</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button style="flex:1" onclick="fermerMenus();autoConnect()">Appliquer</button>
+      <button class="sec" onclick="fermerMenus()">Fermer</button>
+    </div>
+    <div class="muted" style="margin-top:8px">Ctrl+Z revient en arrière si le résultat ne convient pas.</div>
+  </div>
+</div>
+
+<div id="plan"><div id="wrap"><img id="bg" alt="">
+<svg id="ov" viewBox="0 0 1 1" preserveAspectRatio="none"></svg>
+</div></div>
+
+<div id="statusbar">
+  <span id="hint"></span>
+  <div style="flex:1"></div>
+  <span id="sb_stats"></span><span id="sb_xy" class="num"></span>
+</div>
+</div>
+
+<div id="side">
+  <div id="sidetabs">
+    <button class="ptab on" id="t_val" onclick="setTab('val')">Validation</button>
+    <button class="ptab" id="t_qty" onclick="setTab('qty')">Métrés <span class="cnt" id="qtycnt"></span></button>
+  </div>
+
+  <div id="sidebody">
+   <div id="tabval" style="display:flex;flex-direction:column;gap:12px">
+    <div id="sel"></div>
+
+    <div class="card" id="confcard" style="overflow:hidden">
+      <div class="sechd" id="confhd">
+        <span style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f0a500" stroke-width="1.9" stroke-linecap="round" class="ico"><use href="#i-alert"/></svg>
+          Conformité acoustique</span>
+        <span id="confcnt"></span>
+      </div>
+      <div style="padding:0 12px 12px">
+        <div id="conf" style="display:flex;flex-direction:column;gap:6px"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--sep)">
+          <span class="muted">Hauteur sous plafond</span>
+          <span style="display:flex;align-items:center;gap:6px">
+            <input id="hsp" type="number" value="2.7" step="0.1" min="2" max="5" style="width:72px;text-align:center" onchange="majConformite()">
+            <span class="muted">m</span></span>
+        </div>
+        <div class="muted" style="margin-top:6px">Hypothèse : le mur atteint sa cible ; porte h 2,1 m. Le composite est plafonné par le maillon faible.</div>
+      </div>
+    </div>
+
+    <div class="card fold" id="fold_leg">
+      <div class="sechd" onclick="basculerFold('fold_leg')">
+        <span style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9aa7bd" stroke-width="1.9" stroke-linecap="round" class="ico"><use href="#i-list"/></svg>
+          Légende &amp; catégories</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7f8bab" stroke-width="2.4" stroke-linecap="round" class="ico chev"><use href="#i-chev"/></svg>
+      </div>
+      <div class="foldbody"><div id="leg"></div><div id="legzone" style="display:none"></div></div>
+    </div>
+
+    <div class="card fold" id="fold_mat">
+      <div class="sechd" onclick="basculerFold('fold_mat')">
+        <span style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9aa7bd" stroke-width="1.9" class="ico"><use href="#i-grid"/></svg>
+          Matrice STC</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="muted" id="matmod"></span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7f8bab" stroke-width="2.4" stroke-linecap="round" class="ico chev"><use href="#i-chev"/></svg></span>
+      </div>
+      <div class="foldbody">
+        <div class="muted" style="margin-bottom:8px">Cible par couple de catégories. Une valeur modifiée s'applique à toutes les cloisons concernées.</div>
+        <div style="overflow-x:auto"><table id="mat"></table></div>
+      </div>
+    </div>
+
+    <div class="card fold" id="fold_prj">
+      <div class="sechd" onclick="basculerFold('fold_prj')">
+        <span style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9aa7bd" stroke-width="1.9" stroke-linecap="round" class="ico"><use href="#i-layers"/></svg>
+          Projet &amp; historique</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7f8bab" stroke-width="2.4" stroke-linecap="round" class="ico chev"><use href="#i-chev"/></svg>
+      </div>
+      <div class="foldbody">
+        <div class="muted" id="prjinfo" style="margin-bottom:8px"></div>
+        <div class="muted">La sauvegarde HTML contient tout — fond de plan, analyse et vos corrections — et se rouvre d'un double-clic, hors ligne.</div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button style="flex:1" onclick="saveHTML()">Sauver le projet</button>
+          <button class="sec" onclick="basculerMenu('m_exp',event)">Exporter…</button>
+        </div>
+        <div class="muted" style="margin-top:8px">Sous Firefox, activez « Toujours demander où enregistrer » pour choisir le dossier.</div>
+      </div>
+    </div>
+   </div>
+
+   <div id="tabqty" style="display:none">
+    <h3>Quantités par cible STC</h3>
+    <div class="muted" style="margin:4px 0 8px">Métré linéaire des cloisons — paires détectées et manuelles, hors paires ignorées.</div>
+    <div style="overflow-x:auto"><table id="qtytab"></table></div>
+    <button class="sec" style="margin-top:12px" onclick="expQtyCSV()">Exporter le métré (CSV)</button>
+    <h3 style="margin-top:16px">Liste des cloisons</h3>
+    <div class="muted" style="margin:4px 0 8px">Clic sur une ligne : localiser sur le plan. Clic sur un en-tête : trier.</div>
+    <div style="overflow-x:auto"><table id="listtab"></table></div>
+   </div>
+  </div>
+
+  <div id="sidefoot" class="muted">
+    Tout reste dans le navigateur — aucun serveur, aucune connexion.
+    <a href="#" onclick="aideClavier(true);return false">Raccourcis</a>
+  </div>
+</div>
+</div>
+
+  <div id="ws_calc" class="wsfull" style="display:none">
+   <div id="tabcalc">
+    <div class="calcpage">
+
+     <div class="calc-left">
+      <div>
+        <h1>Calculateur STC composite</h1>
+        <div class="muted" style="margin-top:4px">Combinaison énergétique de N éléments :
+          STCc = −10·log₁₀( Σ(Sᵢ·10<sup>−STCᵢ/10</sup>) / ΣSᵢ ). Le maillon faible domine le résultat.</div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="sec" id="calc_load" onclick="calcLoadPair()" style="border-color:rgba(59,130,246,.5);color:var(--lien)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="ico"><use href="#i-back"/></svg>
+          Charger la paire sélectionnée</button>
+        <span class="muted" id="calc_pair">—</span>
+        <div style="flex:1"></div>
+        <div class="tgrp ex" style="padding:4px">
+          <button class="tbtn" id="cu_m2" onclick="calcSetUnit('m2')">m²</button>
+          <button class="tbtn" id="cu_pct" onclick="calcSetUnit('pct')">%</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table id="calc_tab"></table>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;flex-wrap:wrap">
+          <button class="sec" id="calc_add" onclick="calcAdd()" style="border-style:dashed;height:28px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="ico"><use href="#i-plus"/></svg>
+            Ajouter</button>
+          <button class="preset" onclick="calcAddPreset('Porte',30,1.9)"><span class="dot" style="background:#f0a500"></span>Porte 30</button>
+          <button class="preset" onclick="calcAddPreset('Vitrage',38,1.2)"><span class="dot" style="background:#2196F3"></span>Vitrage 38</button>
+          <button class="preset" onclick="calcAddPreset('Grille de transfert',20,.3)"><span class="dot" style="background:#e34948"></span>Grille 20</button>
+          <div style="flex:1"></div>
+          <span class="muted num" id="calc_tot"></span>
+        </div>
+      </div>
+
+      <div id="calc_res"></div>
+      <div id="calc_rules" class="muted"></div>
+      <div class="muted">Le tableau donne le STCc réel à N éléments ; l'abaque ci-contre en donne la lecture 2-à-2 — mur fort contre élément faible.</div>
+     </div>
+
+     <div class="calc-right">
+      <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:240px">
+          <h2 style="margin:0">Abaque — TL composite</h2>
+          <div class="muted" style="margin-top:4px">M. David Egan, <i>Architectural Acoustics</i>, p. 191 ·
+            courbes = part de surface occupée par l'élément faible.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="muted">Part de l'élément faible</span>
+          <select id="calc_curve" onchange="calcSetCurve(this.value)" style="width:104px"></select>
+          <input id="calc_curvefree" type="number" step="0.1" min="0.01" max="100" placeholder="libre"
+            style="width:76px" oninput="calcSetCurve(this.value)">
+          <span class="muted">%</span>
+        </div>
+      </div>
+
+      <div class="card" style="padding:12px 16px">
+        <div id="calc_chart"></div>
+        <div id="calc_read" style="display:flex;align-items:center;gap:12px;margin-top:8px;padding:12px;background:var(--panneau);border-radius:5px;flex-wrap:wrap"></div>
+        <div class="muted" style="margin-top:8px">Cliquez ou glissez sur l'abaque pour déplacer le point de lecture.</div>
+      </div>
+     </div>
+
+    </div>
+   </div>
+  </div>
+
+  <div id="ws_doc" class="wsfull" style="display:none">
+   <div id="tabdoc">
+   <h2>Bonnes pratiques &amp; référentiels acoustiques</h2>
+   <div class="muted">Valeurs <b>indicatives</b> : toujours vérifier l'édition en vigueur du référentiel
+    applicable (liens officiels en bas de page). STC = affaiblissement acoustique en laboratoire ;
+    en chantier viser NIC/ASTC ≈ STC labo − 5.</div>
+
+   <h2 style="color:#5b9dff">Matrice STC de référence — 6 classes génériques</h2>
+   <div class="muted">Cloisons pleine hauteur, base LEED v4 EQ Acoustic Performance adaptée —
+    <b>identique à la matrice éditable de l'onglet Plan</b>. Portes / vitrages traités à part
+    (STC porte ≥ STC mur − 10). Couleurs = mêmes cibles que le plan.</div>
+   <table class="refmat" style="max-width:640px">
+    <tr><th></th><th>Collab.</th><th>Privé</th><th>Conf.</th><th>Circ.</th><th>Tech.</th><th>Confid.</th></tr>
+    <tr><td class="h">Collaboratif</td><td style="background:#2196F3">40</td><td style="background:#FF9800">45</td><td style="background:#F44336">50</td><td style="background:#4CAF50">35</td><td style="background:#9C27B0">55</td><td style="background:#F44336">50</td></tr>
+    <tr><td class="h">Privé</td><td style="background:#FF9800">45</td><td style="background:#FF9800">45</td><td style="background:#F44336">50</td><td style="background:#2196F3">40</td><td style="background:#9C27B0">55</td><td style="background:#F44336">50</td></tr>
+    <tr><td class="h">Conférence</td><td style="background:#F44336">50</td><td style="background:#F44336">50</td><td style="background:#F44336">50</td><td style="background:#FF9800">45</td><td style="background:#9C27B0">55</td><td style="background:#F44336">53</td></tr>
+    <tr><td class="h">Circulation</td><td style="background:#4CAF50">35</td><td style="background:#2196F3">40</td><td style="background:#FF9800">45</td><td style="background:#4CAF50">35</td><td style="background:#F44336">50</td><td style="background:#FF9800">45</td></tr>
+    <tr><td class="h">Technique</td><td style="background:#9C27B0">55</td><td style="background:#9C27B0">55</td><td style="background:#9C27B0">55</td><td style="background:#F44336">50</td><td style="background:#2196F3">40</td><td style="background:#6A1B9A">60</td></tr>
+    <tr><td class="h">Confidentiel</td><td style="background:#F44336">50</td><td style="background:#F44336">50</td><td style="background:#F44336">53</td><td style="background:#FF9800">45</td><td style="background:#6A1B9A">60</td><td style="background:#F44336">53</td></tr>
+   </table>
+   <div class="muted" style="margin-top:4px">Classes : <b>Collaboratif</b> (plateaux partagés, salles polyvalentes, cuisine, gymnase) ·
+    <b>Privé</b> (bureaux fermés) · <b>Conférence</b> (réunion / formation) ·
+    <b>Circulation</b> (couloirs, escaliers, rangements) · <b>Technique</b> (mécanique / électrique) ·
+    <b>Confidentiel</b> (intervention, consultation, santé, toilettes).</div>
+
+   <h2 style="color:#5b9dff">Matrice détaillée par local — pour aller plus loin</h2>
+   <div class="muted">Pour une matrice local-à-local plus fine que les six classes ci-dessus —
+    salle de séminaire, salle de serveurs, bureau paysager, salle d'entretien confidentiel… —
+    voir la <b>Table B.3</b> de <i>Architectural Acoustics</i> (A. M. Jaramillo &amp; C. Steel,
+    Routledge, 2015, p. 235), qui donne l'affaiblissement de laboratoire recommandé entre deux
+    locaux en <b>STC/R_w (dB)</b>. Les valeurs ne sont pas reproduites ici : elles appartiennent
+    à l'ouvrage. La matrice à six classes de l'onglet Plan en reprend la logique sous une forme
+    exploitable automatiquement.</div>
+   <div class="card" style="padding:12px;margin-top:8px;max-width:640px">
+    <div class="muted">Cette matrice détaillée sert surtout à trancher deux cas que les six
+     classes génériques traitent grossièrement : les <b>locaux techniques</b>, dont le critère
+     n'est pas l'affaiblissement de la cloison mais le bruit émis, et les <b>espaces de parole
+     confidentielle</b>, où la cible dépend du niveau de confidentialité visé et non du seul
+     couple de locaux.</div>
+   </div>
+
+   <h2 style="color:#5b9dff">LEED v4 / v4.1 — EQ Acoustic Performance</h2>
+   <div class="muted">STC <b>composite</b> minimal entre espaces adjacents (le chemin faible — portes,
+    vitrages, plénums — pilote le résultat).</div>
+   <table class="reftab" style="max-width:560px">
+    <tr><th>Adjacence</th><th>STC composite</th></tr>
+    <tr><td>Bureau fermé ↔ bureau fermé</td><td>45</td></tr>
+    <tr><td>Salle de conférence ↔ bureau</td><td>50</td></tr>
+    <tr><td>Espaces confidentiels</td><td>50 +</td></tr>
+    <tr><td>Local mécanique ↔ espace sensible</td><td>60</td></tr>
+   </table>
+
+   <h2 style="color:#5b9dff">WELL v2 — Sound, fonctionnalité S05 (Sound Barriers)</h2>
+   <table class="reftab" style="max-width:560px">
+    <tr><th>Espace</th><th>STC</th></tr>
+    <tr><td>Bureau privé / salle d'examen</td><td>45–50</td></tr>
+    <tr><td>Salle de conférence</td><td>50</td></tr>
+    <tr><td>Entre logements</td><td>50 +</td></tr>
+   </table>
+   <div class="muted">Portes avec joints périphériques — l'étanchéité pilote la performance réelle.</div>
+
+   <h2 style="color:#5b9dff">ANSI/ASA S12.60 — Établissements scolaires</h2>
+   <table class="reftab" style="max-width:560px">
+    <tr><th>Adjacence</th><th>STC</th></tr>
+    <tr><td>Classe ↔ classe</td><td>50</td></tr>
+    <tr><td>Classe ↔ couloir (porte ≥ STC 30)</td><td>45</td></tr>
+    <tr><td>Classe ↔ sanitaires / mécanique</td><td>53</td></tr>
+   </table>
+   <div class="muted">Bruit de fond ≤ 35 dBA en classe.</div>
+
+   <h2 style="color:#5b9dff">CNB / NBC 2020 (Canada) — Logements</h2>
+   <table class="reftab" style="max-width:560px">
+    <tr><th>Séparation entre logements</th><th>Indice</th></tr>
+    <tr><td>Exigence (laboratoire)</td><td>ITS ≥ 50</td></tr>
+    <tr><td>Performance terrain</td><td>ASTC ≥ 47</td></tr>
+    <tr><td>Confort recommandé</td><td>ITS 55</td></tr>
+   </table>
+
+   <h2 style="color:#5b9dff">FGI — Établissements de santé</h2>
+   <table class="reftab" style="max-width:560px">
+    <tr><th>Espace</th><th>STC</th></tr>
+    <tr><td>Confidentialité des consultations</td><td>50</td></tr>
+    <tr><td>Salles d'examen</td><td>45</td></tr>
+    <tr><td>Unités psychiatriques / oncologie</td><td>cibles renforcées</td></tr>
+   </table>
+
+   <h2 style="color:#5b9dff">Méthodes de mesure &amp; classification (ASTM)</h2>
+   <table class="reftab" style="max-width:640px">
+    <tr><th>Norme</th><th>Objet</th></tr>
+    <tr><td>ASTM E90</td><td>Mesure en laboratoire de l'affaiblissement d'une paroi</td></tr>
+    <tr><td>ASTM E413</td><td>Calcul de la classification STC</td></tr>
+    <tr><td>ASTM E336 / E413</td><td>Mesure sur site (NIC) et ASTC en conditions réelles</td></tr>
+    <tr><td>ASTM E1332</td><td>Indice OITC (bruit extérieur, façades)</td></tr>
+   </table>
+
+   <h2 style="color:#5b9dff">Règles pratiques</h2>
+   <div class="muted">STC porte ≈ STC mur − 10 · traiter les flanchements (plénum, gaines, jonctions,
+    faux-plafonds) · performance terrain (NIC/ASTC) ≈ valeur labo − 5 · salles d'intervention /
+    counseling : STC 50 recommandé (ASHA) · un composite est plafonné par son maillon faible
+    (voir l'onglet Calculateur STCc et l'abaque d'Egan).</div>
+
+   <h2 style="color:#5b9dff">🔗 Liens officiels — vérification</h2>
+   <ul style="font-size:12px;line-height:1.7">
+    <li><b>LEED (USGBC)</b> — crédit EQ « Acoustic Performance » :
+     <a href="https://www.usgbc.org/leed" target="_blank" rel="noopener">usgbc.org/leed</a>
+     · bibliothèque de crédits <a href="https://www.usgbc.org/credits" target="_blank" rel="noopener">usgbc.org/credits</a></li>
+    <li><b>WELL v2 (IWBI)</b> — concept Sound / S05 :
+     <a href="https://www.wellcertified.com" target="_blank" rel="noopener">wellcertified.com</a>
+     · standard <a href="https://v2.wellcertified.com" target="_blank" rel="noopener">v2.wellcertified.com</a></li>
+    <li><b>ANSI/ASA S12.60 (écoles)</b> — Acoustical Society of America :
+     <a href="https://asastandards.org" target="_blank" rel="noopener">asastandards.org</a></li>
+    <li><b>CNB / NBC 2020 (Canada)</b> — Codes Canada (CNRC) :
+     <a href="https://nrc.canada.ca/fr/certifications-evaluations-normes/codes-canada" target="_blank" rel="noopener">nrc.canada.ca — Codes Canada</a></li>
+    <li><b>FGI (santé)</b> — Facility Guidelines Institute :
+     <a href="https://fgiguidelines.org" target="_blank" rel="noopener">fgiguidelines.org</a></li>
+    <li><b>ASTM E90 / E413 / E336</b> — méthodes &amp; classification :
+     <a href="https://www.astm.org" target="_blank" rel="noopener">astm.org</a></li>
+    <li><b>Abaque TL composite</b> — M. David Egan, <i>Architectural Acoustics</i>, p. 191 (ouvrage de référence)</li>
+   </ul>
+   <div class="muted" style="margin-top:6px">Les liens ouvrent le site officiel dans un nouvel onglet
+    (nécessite une connexion Internet). L'outil lui-même reste 100 % hors-ligne.</div>
+   </div>
+  </div>
+
+</div>
+</div>
+
+<div id="toast"></div>
+
+<div id="kbdlay" onclick="if(event.target===this)aideClavier(false)">
+ <div id="kbdbox">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <h3>Raccourcis clavier</h3>
+    <button class="sec" style="width:28px;height:28px;padding:0" onclick="aideClavier(false)" title="Fermer">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="ico"><use href="#i-close"/></svg></button>
+  </div>
+  <dl>
+    <dt><span class="kbd">V</span></dt><dd>Sélection</dd>
+    <dt><span class="kbd">C</span></dt><dd>Tracer une cloison</dd>
+    <dt><span class="kbd">P</span></dt><dd>Éditer le contour d'une pièce</dd>
+    <dt><span class="kbd">N</span></dt><dd>Tracer un nouvel espace</dd>
+    <dt><span class="kbd">D</span></dt><dd>Poser une porte</dd>
+    <dt><span class="kbd">M</span></dt><dd>Calibrer l'échelle sur une cote connue</dd>
+    <dt><span class="kbd">Suppr</span></dt><dd>Supprimer l'objet sélectionné</dd>
+    <dt><span class="kbd">Échap</span></dt><dd>Désélectionner · fermer un menu</dd>
+    <dt><span class="kbd">Ctrl+Z</span></dt><dd>Annuler — <span class="kbd">Ctrl+Y</span> rétablir</dd>
+    <dt><span class="kbd">Ctrl+S</span></dt><dd>Sauver le projet</dd>
+    <dt><span class="kbd">Ctrl+molette</span></dt><dd>Zoomer sur le plan</dd>
+    <dt><span class="kbd">Shift</span></dt><dd>Pendant un tracé : contraindre à l'horizontale ou la verticale</dd>
+    <dt><span class="kbd">?</span></dt><dd>Ouvrir cette liste</dd>
+  </dl>
+ </div>
+</div>
+
+<script id="d0" type="application/json">null</script>
+<script id="regles" type="application/json">__REGLES__</script>
+<script id="pdfjs_b64" type="text/plain">__PDFJS_B64__</script>
+<script id="worker_b64" type="text/plain">__WORKER_B64__</script>
+<script id="pptx_b64" type="text/plain">__PPTX_B64__</script>
+<script>
+'use strict';
+// ================== bootstrap pdf.js (embarque, hors-ligne) ==================
+function b64bytes(id){
+  const b=atob(document.getElementById(id).textContent.replace(/\s+/g,''));
+  const u=new Uint8Array(b.length);
+  for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i);
+  return u;
+}
+(0,eval)(new TextDecoder().decode(b64bytes('pdfjs_b64')));
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  URL.createObjectURL(new Blob([b64bytes('worker_b64')],{type:'text/javascript'}));
+
+const RULES = JSON.parse(document.getElementById('regles').textContent);
+
+// ================== moteur (portage JS de moteur_stc.py) ==================
+const MOTEUR = (() => {
+const RSCALE = 2;
+
+function norm_(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function classifier(nom){
+  const n = norm_(nom);
+  const ordre = RULES.ordre || Object.keys(RULES.categories);
+  for(const cat of ordre)
+    for(const kw of RULES.categories[cat])
+      if(n.includes(kw)) return cat;
+  return 'prive';
+}
+function sombre(rgb){ return (0.299*rgb[0]+0.587*rgb[1]+0.114*rgb[2])/255 < 0.6; }
+function lum(rgb){ return (0.299*rgb[0]+0.587*rgb[1]+0.114*rgb[2])/255; }
+
+// segments utiles d'un trace : ecarte les sequences "pointille aplati"
+function lignesUtiles(d){
+  const segs = d.items.filter(x=>x);
+  const n = segs.length, drop = new Array(n).fill(false);
+  let i = 0;
+  while(i < n-3){
+    let j = i;
+    while(j+1 < n){
+      const [ax1,ay1,bx1,by1] = segs[j], [ax2,ay2,bx2,by2] = segs[j+1];
+      const l1 = Math.hypot(ax1-bx1, ay1-by1), l2 = Math.hypot(ax2-bx2, ay2-by2);
+      if(l1 > 6 || l2 > 6) break;
+      const gx = ax2-bx1, gy = ay2-by1, gap = Math.hypot(gx,gy);
+      if(!(gap > 0.3 && gap < 9)) break;
+      const dx1 = bx1-ax1, dy1 = by1-ay1, dx2 = bx2-ax2, dy2 = by2-ay2;
+      const crg = Math.abs(dx1*gy-dy1*gx)/(Math.max(l1,.01)*Math.max(gap,.01));
+      const crs = Math.abs(dx1*dy2-dy1*dx2)/(Math.max(l1,.01)*Math.max(l2,.01));
+      if(crg > 0.3 || crs > 0.3) break;
+      j++;
+    }
+    if(j-i >= 3){ for(let k=i;k<=j;k++) drop[k]=true; i=j+1; } else i++;
+  }
+  return segs.filter((_,k)=>!drop[k]);
+}
+
+function seuilMurs(segs, murMin){
+  let n = 0; for(const [w] of segs) if(w >= murMin) n++;
+  if(n >= 150) return [murMin, null];
+  for(const s of [0.3,0.2,0.12,0.05,0.0]){
+    let m = 0; for(const [w] of segs) if(w >= s) m++;
+    if(m >= 150) return [s, 'seuil murs abaissé à '+s+' pt (traits fins dans ce PDF)'];
+  }
+  return [0.0, 'très peu de traits détectés : PDF non vectoriel ?'];
+}
+
+// ---- raster : morphologie par transformee de distance (chanfrein 3-4) ----
+function distTransform(bin, W, H){
+  const INF = 1<<29, d = new Int32Array(W*H);
+  for(let i=0;i<W*H;i++) d[i] = bin[i] ? 0 : INF;
+  for(let y=0;y<H;y++){ const r=y*W;
+    for(let x=0;x<W;x++){ const i=r+x; let v=d[i]; if(!v) continue;
+      if(x>0 && d[i-1]+3<v) v=d[i-1]+3;
+      if(y>0){ if(d[i-W]+3<v) v=d[i-W]+3;
+        if(x>0 && d[i-W-1]+4<v) v=d[i-W-1]+4;
+        if(x<W-1 && d[i-W+1]+4<v) v=d[i-W+1]+4; }
+      d[i]=v; } }
+  for(let y=H-1;y>=0;y--){ const r=y*W;
+    for(let x=W-1;x>=0;x--){ const i=r+x; let v=d[i]; if(!v){continue;}
+      if(x<W-1 && d[i+1]+3<v) v=d[i+1]+3;
+      if(y<H-1){ if(d[i+W]+3<v) v=d[i+W]+3;
+        if(x<W-1 && d[i+W+1]+4<v) v=d[i+W+1]+4;
+        if(x>0 && d[i+W-1]+4<v) v=d[i+W-1]+4; }
+      d[i]=v; } }
+  return d;
+}
+function dilate(bin, W, H, r){
+  const d = distTransform(bin, W, H), t = r*3, out = new Uint8Array(W*H);
+  for(let i=0;i<W*H;i++) out[i] = d[i]<=t ? 1 : 0;
+  return out;
+}
+function closing(bin, W, H, r){
+  const dil = dilate(bin, W, H, r);
+  const inv = new Uint8Array(W*H);
+  for(let i=0;i<W*H;i++) inv[i] = dil[i] ? 0 : 1;
+  const di = dilate(inv, W, H, r);
+  for(let i=0;i<W*H;i++) inv[i] = di[i] ? 0 : 1;
+  return inv;
+}
+
+let _stack = null;
+function labelCC(bin, W, H){
+  if(!_stack || _stack.length < W*H) _stack = new Int32Array(W*H);
+  const lab = new Int32Array(W*H), areas = [0], bb = [null];
+  let n = 0;
+  for(let s=0;s<W*H;s++){
+    if(!bin[s] || lab[s]) continue;
+    n++; let sp = 0; _stack[sp++] = s; lab[s] = n;
+    let a=0, minx=1e9, miny=1e9, maxx=-1, maxy=-1;
+    while(sp){
+      const j = _stack[--sp]; a++;
+      const x = j%W, y = (j-x)/W;
+      if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+      if(x>0 && bin[j-1] && !lab[j-1]){ lab[j-1]=n; _stack[sp++]=j-1; }
+      if(x<W-1 && bin[j+1] && !lab[j+1]){ lab[j+1]=n; _stack[sp++]=j+1; }
+      if(y>0 && bin[j-W] && !lab[j-W]){ lab[j-W]=n; _stack[sp++]=j-W; }
+      if(y<H-1 && bin[j+W] && !lab[j+W]){ lab[j+W]=n; _stack[sp++]=j+W; }
+    }
+    areas.push(a); bb.push([minx,miny,maxx,maxy]);
+  }
+  return {lab, n, areas, bb};
+}
+
+// ---- contour exterieur (marching squares) + Douglas-Peucker ----
+function contour(lab, id, bbx, W){
+  const [minx,miny,maxx,maxy] = bbx;
+  const w = maxx-minx+3, h = maxy-miny+3;
+  const b = new Uint8Array(w*h);
+  for(let y=miny;y<=maxy;y++)
+    for(let x=minx;x<=maxx;x++)
+      if(lab[y*W+x]===id) b[(y-miny+1)*w+(x-minx+1)] = 1;
+  const at=(x,y)=>(x>=0&&y>=0&&x<w&&y<h)?b[y*w+x]:0;
+  let sx=-1, sy=-1;
+  for(let y=0;y<h&&sx<0;y++) for(let x=0;x<w;x++) if(b[y*w+x]){ sx=x; sy=y; break; }
+  if(sx<0) return null;
+  // marche sur les coins de pixels ; code 2x2 autour du coin (UL=1 UR=2 LL=4 LR=8)
+  const pts=[]; let x=sx, y=sy, pdir=-1, guard=0;
+  do{
+    const code=(at(x-1,y-1)?1:0)|(at(x,y-1)?2:0)|(at(x-1,y)?4:0)|(at(x,y)?8:0);
+    let nd; // 0=droite 1=bas 2=gauche 3=haut
+    switch(code){
+      case 1: nd=3; break;
+      case 2: nd=0; break;
+      case 3: nd=0; break;
+      case 4: nd=2; break;
+      case 5: nd=3; break;
+      case 6: nd=(pdir===3)?2:0; break;
+      case 7: nd=0; break;
+      case 8: nd=1; break;
+      case 9: nd=(pdir===0)?3:1; break;
+      case 10: nd=1; break;
+      case 11: nd=1; break;
+      case 12: nd=2; break;
+      case 13: nd=3; break;
+      case 14: nd=2; break;
+      default: return null;
+    }
+    pts.push([x,y]);
+    if(nd===0)x++; else if(nd===1)y++; else if(nd===2)x--; else y--;
+    pdir=nd;
+  } while((x!==sx||y!==sy) && ++guard < 8*w*h);
+  return pts.map(([px,py])=>[px+minx-1, py+miny-1]);
+}
+function dpSimplify(pts, eps){
+  if(pts.length < 3) return pts;
+  const keep = new Uint8Array(pts.length);
+  keep[0] = keep[pts.length-1] = 1;
+  const st = [[0, pts.length-1]];
+  while(st.length){
+    const [a,b] = st.pop();
+    const [ax,ay] = pts[a], [bx,by] = pts[b];
+    const vx=bx-ax, vy=by-ay, L=Math.hypot(vx,vy)||1;
+    let bi=-1, bd=eps;
+    for(let i=a+1;i<b;i++){
+      const d = Math.abs((pts[i][0]-ax)*vy-(pts[i][1]-ay)*vx)/L;
+      if(d > bd){ bd=d; bi=i; }
+    }
+    if(bi>=0){ keep[bi]=1; st.push([a,bi],[bi,b]); }
+  }
+  return pts.filter((_,i)=>keep[i]);
+}
+function polyDe(lab, id, bbx, W, clip){
+  const c = contour(lab, id, bbx, W);
+  if(!c || c.length < 3) return null;
+  let far=0, fd=-1;
+  for(let i=0;i<c.length;i++){
+    const d=(c[i][0]-c[0][0])**2+(c[i][1]-c[0][1])**2;
+    if(d>fd){fd=d;far=i;}
+  }
+  const p1=dpSimplify(c.slice(0,far+1),2.5), p2=dpSimplify(c.slice(far),2.5);
+  const out=p1.concat(p2.slice(1,-1));
+  return out.map(([x,y])=>[Math.round((x/RSCALE+clip.x0)*10)/10,
+                           Math.round((y/RSCALE+clip.y0)*10)/10]);
+}
+
+// ---- portes (arcs de battement) ----
+function fitCercle(pts){
+  let sxx=0,sxy=0,sx=0,syy=0,sy=0,n=pts.length,sxz=0,syz=0,sz=0;
+  for(const [x,y] of pts){
+    const z=x*x+y*y;
+    sxx+=x*x; sxy+=x*y; syy+=y*y; sx+=x; sy+=y; sxz+=x*z; syz+=y*z; sz+=z;
+  }
+  const M=[[sxx,sxy,sx],[sxy,syy,sy],[sx,sy,n]], V=[sxz,syz,sz];
+  for(let c=0;c<3;c++){
+    let p=c; for(let r=c+1;r<3;r++) if(Math.abs(M[r][c])>Math.abs(M[p][c])) p=r;
+    if(Math.abs(M[p][c])<1e-12) return null;
+    [M[c],M[p]]=[M[p],M[c]]; [V[c],V[p]]=[V[p],V[c]];
+    for(let r=0;r<3;r++){ if(r===c) continue;
+      const f=M[r][c]/M[c][c];
+      for(let k=c;k<3;k++) M[r][k]-=f*M[c][k];
+      V[r]-=f*V[c];
+    }
+  }
+  const A=V[0]/M[0][0], B=V[1]/M[1][1], C=V[2]/M[2][2];
+  const cx=A/2, cy=B/2, r2=C+cx*cx+cy*cy;
+  if(r2<=0) return null;
+  const r=Math.sqrt(r2);
+  let res=0;
+  for(const [x,y] of pts){ const e=Math.abs(Math.hypot(x-cx,y-cy)-r); if(e>res)res=e; }
+  return [cx,cy,r,res];
+}
+function arcInfo(pts, cx, cy){
+  const angs = pts.map(([x,y])=>[Math.atan2(y-cy,x-cx),[x,y]]).sort((a,b)=>a[0]-b[0]);
+  let gmax=-1, ig=0;
+  for(let i=0;i<angs.length-1;i++){
+    const g=angs[i+1][0]-angs[i][0];
+    if(g>gmax){gmax=g;ig=i;}
+  }
+  const gw=2*Math.PI-(angs[angs.length-1][0]-angs[0][0]);
+  if(gw>gmax){gmax=gw;ig=angs.length-1;}
+  const span=(2*Math.PI-gmax)*180/Math.PI;
+  return [span, angs[(ig+1)%angs.length][1], angs[ig][1]];
+}
+function detecterPortes(drawings, clip, ptPerM){
+  const frags=[];
+  for(const d of drawings){
+    const chs=[]; let cur=[];
+    const fin=()=>{ if(cur.length>=5) chs.push(cur); cur=[]; };
+    for(const it of d.items){
+      if(!it){ fin(); continue; }
+      const [x1,y1,x2,y2]=it;
+      if(Math.hypot(x2-x1,y2-y1)>9){ fin(); continue; }
+      if(cur.length && Math.hypot(cur[cur.length-1][0]-x1,cur[cur.length-1][1]-y1)<=7)
+        cur.push([x1,y1],[x2,y2]);
+      else { fin(); cur=[[x1,y1],[x2,y2]]; }
+    }
+    fin();
+    for(const ch of chs){
+      const a=ch[0], b=ch[ch.length-1];
+      if(!clip.contient(a[0],a[1]) || !clip.contient(b[0],b[1])) continue;
+      const f=fitCercle(ch);
+      if(!f) continue;
+      const [cx,cy,r,res]=f;
+      if(res>0.45 || r/ptPerM<0.3 || r/ptPerM>1.4) continue;
+      frags.push({cx,cy,r,ch});
+    }
+  }
+  const groupes=[];
+  for(const fr of frags){
+    let g=null;
+    for(const q of groupes)
+      if(Math.abs(q.cx-fr.cx)<3 && Math.abs(q.cy-fr.cy)<3 && Math.abs(q.r-fr.r)/fr.r<0.12){ g=q; break; }
+    if(g) g.pts.push(...fr.ch);
+    else groupes.push({cx:fr.cx,cy:fr.cy,r:fr.r,pts:fr.ch.slice()});
+  }
+  let portes=[];
+  for(const g of groupes){
+    const f=fitCercle(g.pts);
+    if(!f) continue;
+    const [cx,cy,r,res]=f, rm=r/ptPerM;
+    if(res>0.7 || rm<0.35 || rm>1.35) continue;
+    const [span,e1,e2]=arcInfo(g.pts,cx,cy);
+    if(span<45 || span>200) continue;
+    portes.push({x:Math.round(cx*10)/10, y:Math.round(cy*10)/10, r_m:Math.round(rm*100)/100,
+                 a1:[Math.round(e1[0]*10)/10,Math.round(e1[1]*10)/10],
+                 a2:[Math.round(e2[0]*10)/10,Math.round(e2[1]*10)/10]});
+  }
+  portes.sort((a,b)=>b.r_m-a.r_m);
+  const uniques=[];
+  for(const p of portes)
+    if(uniques.every(q=>Math.hypot(p.x-q.x,p.y-q.y)>0.6*ptPerM)) uniques.push(p);
+  return uniques;
+}
+
+// ---- escaliers (volees de marches) ----
+function detecterVolees(drawings, clip, ptPerM){
+  const parAngle={};
+  for(const d of drawings){
+    for(const [x1,y1,x2,y2] of lignesUtiles(d)){
+      const L=Math.hypot(x2-x1,y2-y1);
+      if(L < 0.6*ptPerM || L > 3.5*ptPerM) continue;
+      if(!clip.contient(x1,y1) || !clip.contient(x2,y2)) continue;
+      const ang=((Math.round((Math.atan2(y2-y1,x2-x1)*180/Math.PI%180+180)%180/5)*5)%180);
+      (parAngle[ang]=parAngle[ang]||[]).push([x1,y1,x2,y2,L]);
+    }
+  }
+  const espMin=0.20*ptPerM, espMax=0.45*ptPerM, volees=[];
+  for(const angS of Object.keys(parAngle)){
+    const ang=+angS, th=ang*Math.PI/180;
+    const ux=Math.cos(th), uy=Math.sin(th), nx=-uy, ny=ux;
+    const items=parAngle[angS].map(([x1,y1,x2,y2,L])=>{
+      const mx=(x1+x2)/2, my=(y1+y2)/2;
+      return [mx*nx+my*ny, mx*ux+my*uy, L, [x1,y1,x2,y2]];
+    }).sort((a,b)=>a[0]-b[0]);
+    const used=new Array(items.length).fill(false);
+    for(let i=0;i<items.length;i++){
+      if(used[i]) continue;
+      const run=[i];
+      for(let j=i+1;j<items.length;j++){
+        if(used[j]) continue;
+        const dn=items[j][0]-items[run[run.length-1]][0];
+        if(dn > espMax*1.5) break;
+        const dl=Math.abs(items[j][1]-items[run[run.length-1]][1]);
+        const rL=Math.abs(items[j][2]-items[run[run.length-1]][2])/Math.max(items[j][2],items[run[run.length-1]][2]);
+        if(dn >= espMin*0.7 && dn <= espMax && dl < items[j][2]*0.6 && rL < 0.35) run.push(j);
+      }
+      if(run.length < 5) continue;
+      const ds=[]; for(let k=0;k<run.length-1;k++) ds.push(items[run[k+1]][0]-items[run[k]][0]);
+      if(Math.max(...ds)-Math.min(...ds) > 0.12*ptPerM) continue;
+      for(const k of run) used[k]=true;
+      let xs=[], ys=[];
+      for(const k of run){ const [x1,y1,x2,y2]=items[k][3]; xs.push(x1,x2); ys.push(y1,y2); }
+      volees.push([Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys),run.length]);
+    }
+  }
+  const fusion=[];
+  for(const bb of volees){
+    let f=null;
+    for(const q of fusion)
+      if(!(bb[2]<q[0]-8 || q[2]<bb[0]-8 || bb[3]<q[1]-8 || q[3]<bb[1]-8)){ f=q; break; }
+    if(f){ f[0]=Math.min(f[0],bb[0]); f[1]=Math.min(f[1],bb[1]);
+           f[2]=Math.max(f[2],bb[2]); f[3]=Math.max(f[3],bb[3]); f[4]=Math.max(f[4],bb[4]); }
+    else fusion.push(bb.slice());
+  }
+  return fusion;
+}
+
+// ---- adjacences : BFS bi-label (equivalent dilatation K + intersection) ----
+function adjacences(lab, idsRooms, wallpix, W, H, K){
+  const N=W*H, l1=new Int32Array(N), l2=new Int32Array(N);
+  let maxId=0; for(const i of idsRooms) if(i>maxId) maxId=i;
+  const inRoom=new Uint8Array(maxId+1);
+  for(const i of idsRooms) inRoom[i]=1;
+  let frontier=[];
+  for(let i=0;i<N;i++){
+    const L=lab[i];
+    if(L>0 && L<=maxId && inRoom[L]){
+      l1[i]=L;
+      const x=i%W;
+      if((x>0 && lab[i-1]!==L) || (x<W-1 && lab[i+1]!==L) ||
+         (i>=W && lab[i-W]!==L) || (i<N-W && lab[i+W]!==L)) frontier.push(i,L);
+    }
+  }
+  const tryv=(j,L,next)=>{
+    if(l1[j]===L || l2[j]===L) return;
+    if(!l1[j]){ l1[j]=L; next.push(j,L); }
+    else if(!l2[j]){ l2[j]=L; next.push(j,L); }
+  };
+  for(let dist=1; dist<=K && frontier.length; dist++){
+    const next=[];
+    for(let q=0;q<frontier.length;q+=2){
+      const i=frontier[q], L=frontier[q+1], x=i%W;
+      if(x>0) tryv(i-1,L,next);
+      if(x<W-1) tryv(i+1,L,next);
+      if(i>=W) tryv(i-W,L,next);
+      if(i<N-W) tryv(i+W,L,next);
+    }
+    frontier=next;
+  }
+  const parPaire=new Map();
+  for(let i=0;i<N;i++){
+    if(!wallpix[i] || !l1[i] || !l2[i]) continue;
+    const a=Math.min(l1[i],l2[i]), b=Math.max(l1[i],l2[i]);
+    const k=a+'_'+b;
+    let e=parPaire.get(k);
+    if(!e){ e={a,b,px:[]}; parPaire.set(k,e); }
+    e.px.push(i);
+  }
+  return parPaire;
+}
+function ccPixels(pixels, W){
+  const set=new Set(pixels), comps=[], vus=new Set();
+  for(const p of pixels){
+    if(vus.has(p)) continue;
+    const comp=[], st=[p]; vus.add(p);
+    while(st.length){
+      const i=st.pop(); comp.push(i);
+      const x=i%W;
+      for(const dy of [-W,0,W]) for(const dx of [-1,0,1]){
+        if(!dy && !dx) continue;
+        if(dx===-1 && x===0) continue;
+        if(dx===1 && x===W-1) continue;
+        const j=i+dy+dx;
+        if(set.has(j) && !vus.has(j)){ vus.add(j); st.push(j); }
+      }
+    }
+    comps.push(comp);
+  }
+  return comps;
+}
+function runsDe(pixels, W, GAP, px2m, clip){
+  const xs=pixels.map(i=>i%W), ys=pixels.map(i=>(i-i%W)/W);
+  const horiz=(Math.max(...xs)-Math.min(...xs)) >= (Math.max(...ys)-Math.min(...ys));
+  const prim=horiz?xs:ys, sec=horiz?ys:xs;
+  const o=prim.map((_,i)=>i).sort((a,b)=>prim[a]-prim[b]);
+  const p=o.map(i=>prim[i]), s=o.map(i=>sec[i]);
+  const toPt=(x,y)=>[Math.round((x/RSCALE+clip.x0)*10)/10, Math.round((y/RSCALE+clip.y0)*10)/10];
+  const out=[]; let st=0;
+  for(let i=1;i<=p.length;i++){
+    if(i===p.length || p[i]-p[i-1] > GAP){
+      const pp=p.slice(st,i), ss=s.slice(st,i).sort((a,b)=>a-b);
+      const lm=(pp[pp.length-1]-pp[0])*px2m;
+      if(lm >= 0.4){
+        const mid=ss[Math.floor(ss.length/2)];
+        const a=horiz?[pp[0],mid]:[mid,pp[0]], b=horiz?[pp[pp.length-1],mid]:[mid,pp[pp.length-1]];
+        const seg={p1:toPt(a[0],a[1]), p2:toPt(b[0],b[1]), len_m:Math.round(lm*10)/10, horiz};
+        seg.cx=Math.round((seg.p1[0]+seg.p2[0])/2*10)/10;
+        seg.cy=Math.round((seg.p1[1]+seg.p2[1])/2*10)/10;
+        out.push(seg);
+      }
+      st=i;
+    }
+  }
+  return out;
+}
+
+// ---- analyse complete ----
+async function analyser(extr, finesse, echelle, progress){
+  const say = async t => { if(progress) progress(t); await new Promise(r=>setTimeout(r,15)); };
+  const ptPerM = 72/25.4*1000/echelle;
+  const drawings = extr.drawings.filter(d=>d.type==='s'||d.type==='fs');
+  const sombres = drawings.filter(d=>sombre(d.rgb) && !d.dashed);
+
+  await say('Tri des traits…');
+  const segsWL = [];
+  for(const d of sombres) for(const s of lignesUtiles(d))
+    segsWL.push([d.w, Math.hypot(s[0]-s[2], s[1]-s[3])]);
+  if(!segsWL.length) throw new Error('Aucun trait détecté sur cette page (PDF scanné ou image ?)');
+  let [murMin, noteSeuil] = seuilMurs(segsWL, 0.45);
+  const notes = noteSeuil ? [noteSeuil] : [];
+
+  let xs=[], ys=[];
+  for(const d of sombres){
+    if(d.w < murMin) continue;
+    for(const [x1,y1,x2,y2] of lignesUtiles(d)){ xs.push(x1,x2); ys.push(y1,y2); }
+  }
+  if(!xs.length) throw new Error('Aucun trait de mur détecté (PDF non vectoriel ?)');
+  const clip = {
+    x0: Math.max(0, Math.min(...xs)-40), y0: Math.max(0, Math.min(...ys)-40),
+    x1: Math.min(extr.pw, Math.max(...xs)+40), y1: Math.min(extr.ph, Math.max(...ys)+40)
+  };
+  clip.w=clip.x1-clip.x0; clip.h=clip.y1-clip.y0;
+  clip.contient=(x,y)=>x>=clip.x0&&x<=clip.x1&&y>=clip.y0&&y<=clip.y1;
+
+  const W=Math.floor(clip.w*RSCALE), H=Math.floor(clip.h*RSCALE), N=W*H;
+
+  await say('Tracé des masques…');
+  const cv=[0,1,2].map(()=>{
+    const c=document.createElement('canvas'); c.width=W; c.height=H;
+    const g=c.getContext('2d',{willReadFrequently:true});
+    g.strokeStyle='#fff'; g.lineCap='round'; g.lineJoin='round';
+    return [c,g];
+  });
+  const trait=(g,lw,x1,y1,x2,y2)=>{
+    g.lineWidth=lw; g.beginPath();
+    g.moveTo((x1-clip.x0)*RSCALE,(y1-clip.y0)*RSCALE);
+    g.lineTo((x2-clip.x0)*RSCALE,(y2-clip.y0)*RSCALE); g.stroke();
+  };
+  const sDoor=murMin*0.55;
+  for(const d of sombres){
+    const wall=d.w>=murMin, door=d.w>=sDoor&&d.w<murMin, thin=d.w<sDoor;
+    for(const [x1,y1,x2,y2] of lignesUtiles(d)){
+      if(!clip.contient(x1,y1)||!clip.contient(x2,y2)) continue;
+      const L=Math.hypot(x2-x1,y2-y1);
+      const axe=Math.abs(x1-x2)<0.5||Math.abs(y1-y2)<0.5;
+      if(wall){ trait(cv[0][1],3,x1,y1,x2,y2); trait(cv[1][1],3,x1,y1,x2,y2); trait(cv[2][1],3,x1,y1,x2,y2); }
+      else if(door){ trait(cv[0][1],5,x1,y1,x2,y2); trait(cv[2][1],5,x1,y1,x2,y2); }
+      else if(thin && L>=6 && axe){
+        trait(cv[0][1],3,x1,y1,x2,y2);
+        if(L>=12) trait(cv[1][1],3,x1,y1,x2,y2);
+      }
+    }
+  }
+  const lire=c=>{
+    const dd=c[1].getImageData(0,0,W,H).data, b=new Uint8Array(N);
+    for(let i=0;i<N;i++) b[i]=dd[i*4+3]>=128?1:0;
+    return b;
+  };
+  const mask=lire(cv[0]), wallpix=lire(cv[1]), maskWd=lire(cv[2]);
+
+  await say('Emprise du bâtiment…');
+  const ch=closing(mask,W,H,30);
+  const freeh=new Uint8Array(N);
+  for(let i=0;i<N;i++) freeh[i]=ch[i]?0:1;
+  const lh=labelCC(freeh,W,H);
+  const dehors=new Uint8Array(lh.n+1);
+  for(let x=0;x<W;x++){ dehors[lh.lab[x]]=1; dehors[lh.lab[(H-1)*W+x]]=1; }
+  for(let y=0;y<H;y++){ dehors[lh.lab[y*W]]=1; dehors[lh.lab[y*W+W-1]]=1; }
+  dehors[0]=0;
+  let hull=new Uint8Array(N);
+  for(let i=0;i<N;i++) hull[i]=(ch[i]||(lh.lab[i]&&!dehors[lh.lab[i]]))?1:0;
+  const hc=labelCC(hull,W,H);
+  if(hc.n>1){
+    let big=1; for(let i=2;i<=hc.n;i++) if(hc.areas[i]>hc.areas[big]) big=i;
+    for(let i=0;i<N;i++) hull[i]=hc.lab[i]===big?1:0;
+  }
+
+  // trame de sol (points gris)
+  const hatch=[];
+  for(const d of drawings){
+    const l=lum(d.rgb);
+    if(l<0.6||l>0.92||d.w>0.35) continue;
+    for(const it of d.items){
+      if(!it) continue;
+      const [x1,y1,x2,y2]=it;
+      if(Math.hypot(x2-x1,y2-y1)>8) continue;
+      const mx=(x1+x2)/2, my=(y1+y2)/2;
+      if(clip.contient(mx,my))
+        hatch.push([Math.floor((mx-clip.x0)*RSCALE), Math.floor((my-clip.y0)*RSCALE)]);
+    }
+  }
+  const filtreTrame=hatch.length>800;
+
+  await say('Détection des pièces…');
+  const r=1+Math.floor(finesse);
+  const closed=closing(mask,W,H,r);
+  const free=new Uint8Array(N);
+  for(let i=0;i<N;i++) free[i]=(!closed[i]&&hull[i])?1:0;
+  const cc=labelCC(free,W,H);
+  const lab=cc.lab;
+  const pxPerM2=(ptPerM*RSCALE)**2;
+  const comps=[];
+  for(let i=1;i<=cc.n;i++) if(cc.areas[i]/pxPerM2>=1.5) comps.push(i);
+
+  const texte={};
+  for(const wd of extr.words){
+    if(!clip.contient(wd.x,wd.y)) continue;
+    const px=Math.floor((wd.x-clip.x0)*RSCALE), py=Math.floor((wd.y-clip.y0)*RSCALE);
+    if(px<0||py<0||px>=W||py>=H) continue;
+    const c=lab[py*W+px];
+    if(c) (texte[c]=texte[c]||[]).push([wd.y0,wd.x0,wd.s]);
+  }
+  const tramePar={};
+  if(filtreTrame)
+    for(const [px,py] of hatch){
+      if(px<0||py<0||px>=W||py>=H) continue;
+      const c=lab[py*W+px];
+      if(c) tramePar[c]=(tramePar[c]||0)+1;
+    }
+
+  const rooms={}; let k=0;
+  for(const c of comps){
+    const adet=Math.round(cc.areas[c]/pxPerM2*10)/10;
+    if(filtreTrame && (tramePar[c]||0) < Math.max(2, adet*0.15)) continue;
+    const ws=(texte[c]||[]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+    let nom=ws.map(w=>w[2]).join(' ').slice(0,45).trim();
+    let num=null;
+    for(const w of ws) if(/^\d{1,4}(-\d+)?$/.test(w[2])){ num=w[2]; break; }
+    const m=nom.match(/(\d+(?:[.,]\d+)?)\s*m/);
+    const adecl=m?parseFloat(m[1].replace(',','.')):null;
+    if(!nom){
+      if(adet<12) continue;
+      k++; num=num||('P'+k); nom='Espace non identifié';
+    }
+    const cat=nom!=='Espace non identifié'?classifier(nom):'circulation';
+    rooms[String(c)]={num:num||String(c), name:nom, area_decl:adecl, area_det:adet, cat};
+  }
+
+  await say('Récupération des circulations…');
+  const closedWd=closing(maskWd,W,H,r);
+  const freeWd=new Uint8Array(N);
+  for(let i=0;i<N;i++) freeWd[i]=(!closedWd[i]&&hull[i])?1:0;
+  const cc2=labelCC(freeWd,W,H);
+  const retenus=new Uint8Array(N);
+  {
+    let maxid=0; for(const key of Object.keys(rooms)) maxid=Math.max(maxid,+key);
+    const inR=new Uint8Array(maxid+1);
+    for(const key of Object.keys(rooms)) inR[+key]=1;
+    for(let i=0;i<N;i++) if(lab[i]&&lab[i]<=maxid&&inR[lab[i]]) retenus[i]=1;
+  }
+  let prochain=cc.n+1;
+  for(let c2=1;c2<=cc2.n;c2++){
+    const a2=cc2.areas[c2]/pxPerM2;
+    if(a2<5) continue;
+    let inter=0, tot=0, npts=0;
+    const bb2=cc2.bb[c2];
+    for(let y=bb2[1];y<=bb2[3];y++)
+      for(let x=bb2[0];x<=bb2[2];x++){
+        const i=y*W+x;
+        if(cc2.lab[i]!==c2) continue;
+        tot++; if(retenus[i]) inter++;
+      }
+    if(inter/tot > 0.30) continue;
+    if(filtreTrame){
+      for(const [px,py] of hatch)
+        if(px>=bb2[0]&&px<=bb2[2]&&py>=bb2[1]&&py<=bb2[3]&&cc2.lab[py*W+px]===c2) npts++;
+      if(npts < Math.max(2, a2*0.10)) continue;
+    }
+    let zone=0;
+    const fragIds=new Set();
+    for(let y=bb2[1];y<=bb2[3];y++)
+      for(let x=bb2[0];x<=bb2[2];x++){
+        const i=y*W+x;
+        if(cc2.lab[i]!==c2||retenus[i]) continue;
+        zone++;
+        if(lab[i]===0) lab[i]=prochain;
+        else if(!rooms[String(lab[i])]) fragIds.add(lab[i]);
+      }
+    if(zone/pxPerM2 < 5) continue;
+    if(fragIds.size)
+      for(let i=0;i<N;i++) if(fragIds.has(lab[i])) lab[i]=prochain;
+    let aire=0, minx=1e9,miny=1e9,maxx=-1,maxy=-1;
+    for(let y2=0;y2<H;y2++) for(let x2=0;x2<W;x2++){
+      if(lab[y2*W+x2]!==prochain) continue;
+      aire++; if(x2<minx)minx=x2; if(x2>maxx)maxx=x2; if(y2<miny)miny=y2; if(y2>maxy)maxy=y2;
+    }
+    const adet2=Math.round(aire/pxPerM2*10)/10;
+    if(adet2>=5){
+      k++;
+      rooms[String(prochain)]={num:'P'+k, name:'Espace non identifié', area_decl:null,
+                               area_det:adet2, cat:'circulation'};
+      cc.bb[prochain]=[minx,miny,maxx,maxy];
+      cc.areas[prochain]=aire;
+    }
+    prochain++;
+  }
+
+  await say('Escaliers et polygones…');
+  const volees=detecterVolees(drawings, clip, ptPerM);
+  let nEsc=0;
+  for(const [x0,y0,x1,y1] of volees){
+    const px0=Math.max(0,Math.floor((x0-clip.x0)*RSCALE)), px1=Math.min(W-1,Math.floor((x1-clip.x0)*RSCALE));
+    const py0=Math.max(0,Math.floor((y0-clip.y0)*RSCALE)), py1=Math.min(H-1,Math.floor((y1-clip.y0)*RSCALE));
+    if(px1<=px0||py1<=py0) continue;
+    const votes={};
+    for(let y=py0;y<=py1;y++) for(let x=px0;x<=px1;x++){
+      const v=lab[y*W+x];
+      if(v) votes[v]=(votes[v]||0)+1;
+    }
+    const ord=Object.keys(votes).sort((a,b)=>votes[b]-votes[a]);
+    for(const v of ord){
+      const rr=rooms[v];
+      if(!rr) continue;
+      if(!rr.escalier) nEsc++;
+      rr.escalier=true;
+      if(rr.name==='Espace non identifié'){ rr.name="Cage d'escalier"; rr.cat='circulation'; }
+      break;
+    }
+  }
+
+  // reclassification par nom + purge des petites cellules anonymes
+  for(const rid of Object.keys(rooms)){
+    const rr=rooms[rid];
+    if(rr.name!=='Espace non identifié') rr.cat=classifier(rr.name);
+    if(rr.name==='Espace non identifié' && rr.area_det<12) delete rooms[rid];
+  }
+
+  const polys={};
+  for(const rid of Object.keys(rooms).map(Number).sort((a,b)=>a-b)){
+    const bbx=cc.bb[rid];
+    if(!bbx) continue;
+    const p=polyDe(lab, rid, bbx, W, clip);
+    if(p && p.length>=3) polys[String(rid)]=p;
+  }
+
+  await say('Cloisons entre pièces…');
+  const ids=Object.keys(rooms).map(Number).sort((a,b)=>a-b);
+  const parPaire=adjacences(lab, ids, wallpix, W, H, 14);
+  const px2m=1/(ptPerM*RSCALE), GAP=10;
+  const pairs=[];
+  for(const e of parPaire.values()){
+    if(e.px.length<8) continue;
+    let segs=[];
+    for(const comp of ccPixels(e.px,W))
+      if(comp.length>=8) segs=segs.concat(runsDe(comp,W,GAP,px2m,clip));
+    if(!segs.length) continue;
+    const ra=rooms[String(e.a)], rb=rooms[String(e.b)];
+    const key=[ra.cat,rb.cat].sort().join('|');
+    pairs.push({ca:e.a, cb:e.b, a:ra.num, b:rb.num, name_a:ra.name, name_b:rb.name,
+                cat_a:ra.cat, cat_b:rb.cat, stc:RULES.matrice_stc[key] ?? 45,
+                len_m:Math.round(segs.reduce((s2,x)=>s2+x.len_m,0)*10)/10, segments:segs});
+  }
+
+  await say('Portes…');
+  const portes=detecterPortes(drawings, clip, ptPerM);
+  const dSeg=(px,py,s)=>{
+    const [x1,y1]=s.p1,[x2,y2]=s.p2, vx=x2-x1, vy=y2-y1, L2=vx*vx+vy*vy;
+    const t=L2===0?0:Math.max(0,Math.min(1,((px-x1)*vx+(py-y1)*vy)/L2));
+    return Math.hypot(px-(x1+t*vx), py-(y1+t*vy));
+  };
+  for(const pt of portes){
+    const sondes=[[pt.x,pt.y],pt.a1,pt.a2];
+    let best=null, bd=0.6*ptPerM;
+    for(const p of pairs) for(const s of p.segments){
+      let dd=1e9;
+      for(const [sx,sy] of sondes){ const d2=dSeg(sx,sy,s); if(d2<dd)dd=d2; }
+      if(dd<bd){ bd=dd; best=p; }
+    }
+    if(best){ best.portes=(best.portes||0)+1; pt.pair=best.ca+'_'+best.cb; }
+    else pt.pair=null;
+  }
+
+  let stats=Object.keys(rooms).length+' pièces · '+pairs.length+' cloisons · '+
+    portes.length+' portes · '+nEsc+" cages d'escalier · murs >= "+murMin+' pt';
+  if(notes.length) stats+=' · '+notes.join(' · ');
+
+  return {clip:[clip.x0,clip.y0,clip.x1,clip.y1], rooms, pairs, polys, portes,
+          matrix:RULES.matrice_stc, cats:Object.keys(RULES.categories),
+          vision_note:stats, echelle, finesse};
+}
+
+// ---- extraction pdf.js ----
+async function extraire(pdfPage){
+  const vp=pdfPage.getViewport({scale:1});
+  const op=await pdfPage.getOperatorList();
+  const O=pdfjsLib.OPS, F=op.fnArray, A=op.argsArray;
+  const mul=(m,n)=>[m[0]*n[0]+m[2]*n[1], m[1]*n[0]+m[3]*n[1],
+                    m[0]*n[2]+m[2]*n[3], m[1]*n[2]+m[3]*n[3],
+                    m[0]*n[4]+m[2]*n[5]+m[4], m[1]*n[4]+m[3]*n[5]+m[5]];
+  const ap=(m,x,y)=>[m[0]*x+m[2]*y+m[4], m[1]*x+m[3]*y+m[5]];
+  const stack=[]; let ctm=vp.transform.slice(), lw=1, rgb=[0,0,0], dashed=false;
+  const drawings=[];
+  for(let i=0;i<F.length;i++){
+    const f=F[i];
+    if(f===O.save) stack.push([ctm.slice(),lw,rgb.slice(),dashed]);
+    else if(f===O.restore){ const s=stack.pop(); if(s){ ctm=s[0]; lw=s[1]; rgb=s[2]; dashed=s[3]; } }
+    else if(f===O.transform) ctm=mul(ctm,A[i]);
+    else if(f===O.setLineWidth) lw=A[i][0];
+    else if(f===O.setStrokeRGBColor){ const c=A[i]; rgb=[c[0],c[1],c[2]]; }
+    else if(f===O.setStrokeGray){ const g=Math.round(A[i][0]*255); rgb=[g,g,g]; }
+    else if(f===O.setStrokeCMYKColor){ const [c1,m1,y1,k1]=A[i];
+      rgb=[255*(1-Math.min(1,c1+k1)),255*(1-Math.min(1,m1+k1)),255*(1-Math.min(1,y1+k1))]; }
+    else if(f===O.setDash) dashed=!!(A[i][0]&&A[i][0].length);
+    else if(f===O.constructPath){
+      const nxt=F[i+1];
+      let type=null;
+      if(nxt===O.stroke||nxt===O.closeStroke) type='s';
+      else if(nxt===O.fillStroke||nxt===O.eoFillStroke||
+              nxt===O.closeFillStroke||nxt===O.closeEOFillStroke) type='fs';
+      if(!type) continue;
+      const subs=A[i][0], co=A[i][1];
+      const sc=Math.sqrt(Math.abs(ctm[0]*ctm[3]-ctm[1]*ctm[2]))||1;
+      const d={type, w:lw*sc, rgb:rgb.slice(), dashed, items:[]};
+      let kk=0, cur=null, start=null;
+      for(const s of subs){
+        if(s===O.moveTo){ cur=ap(ctm,co[kk],co[kk+1]); kk+=2; start=cur; d.items.push(null); }
+        else if(s===O.lineTo){
+          const p2=ap(ctm,co[kk],co[kk+1]); kk+=2;
+          if(cur) d.items.push([cur[0],cur[1],p2[0],p2[1]]);
+          cur=p2;
+        }
+        else if(s===O.curveTo){ const p2=ap(ctm,co[kk+4],co[kk+5]); kk+=6; cur=p2; d.items.push(null); }
+        else if(s===O.curveTo2||s===O.curveTo3){ const p2=ap(ctm,co[kk+2],co[kk+3]); kk+=4; cur=p2; d.items.push(null); }
+        else if(s===O.closePath){ if(cur&&start) d.items.push([cur[0],cur[1],start[0],start[1]]); cur=start; }
+        else if(s===O.rectangle){ kk+=4; d.items.push(null); }
+      }
+      if(d.items.some(x=>x)) drawings.push(d);
+    }
+  }
+  const tc=await pdfPage.getTextContent();
+  const words=[];
+  for(const it of tc.items){
+    if(!it.str||!it.str.trim()) continue;
+    const tr=it.transform;
+    if(Math.abs(tr[1])>0.01) continue;
+    const parts=it.str.split(/\s+/).filter(x=>x);
+    const total=Math.max(1,it.str.length);
+    let off=0;
+    for(const w of parts){
+      const idx=it.str.indexOf(w,off); off=idx+w.length;
+      const ww=it.width*w.length/total;
+      const ux=tr[4]+it.width*(idx+w.length/2)/total;
+      const uy=tr[5]+(it.height||0)*0.35;
+      const p=ap(vp.transform,ux,uy);
+      words.push({x:p[0], y:p[1], x0:p[0]-ww/2, y0:p[1]-(it.height||0)/2, s:w});
+    }
+  }
+  return {drawings, words, pw:vp.width, ph:vp.height};
+}
+
+async function rendreFond(pdfPage, clipArr){
+  const sc=150/72;
+  const vpz=pdfPage.getViewport({scale:sc});
+  const c=document.createElement('canvas');
+  c.width=Math.round(vpz.width); c.height=Math.round(vpz.height);
+  await pdfPage.render({canvasContext:c.getContext('2d'), viewport:vpz}).promise;
+  const [x0,y0,x1,y1]=clipArr;
+  const cw=Math.round((x1-x0)*sc), chh=Math.round((y1-y0)*sc);
+  const c2=document.createElement('canvas'); c2.width=cw; c2.height=chh;
+  c2.getContext('2d').drawImage(c, Math.round(x0*sc), Math.round(y0*sc), cw, chh, 0, 0, cw, chh);
+  return c2.toDataURL('image/jpeg', 0.72);
+}
+
+return {analyser, extraire, rendreFond};
+})();
+
+// ================== accueil ==================
+let pdfDoc=null, pdfNom=null, pageChoisie=0;
+const acc={
+  drop:document.getElementById('drop'), fpdf:document.getElementById('fpdf'),
+  vig:document.getElementById('vignettes'), params:document.getElementById('acc_params'),
+  status:document.getElementById('acc_status')
+};
+function statut(t, err){ acc.status.textContent=t; acc.status.className=err?'err':''; }
+acc.drop.onclick=()=>acc.fpdf.click();
+acc.drop.ondragover=e=>{ e.preventDefault(); acc.drop.classList.add('hov'); };
+acc.drop.ondragleave=()=>acc.drop.classList.remove('hov');
+acc.drop.ondrop=e=>{
+  e.preventDefault(); acc.drop.classList.remove('hov');
+  const f=e.dataTransfer.files[0];
+  if(f) chargerPDF(f);
+};
+acc.fpdf.onchange=e=>{ if(e.target.files[0]) chargerPDF(e.target.files[0]); };
+const drop2=document.getElementById('drop2'), fprj=document.getElementById('fprj');
+drop2.onclick=()=>fprj.click();
+drop2.ondragover=e=>{ e.preventDefault(); drop2.classList.add('hov'); };
+drop2.ondragleave=()=>drop2.classList.remove('hov');
+drop2.ondrop=e=>{
+  e.preventDefault(); drop2.classList.remove('hov');
+  const f=e.dataTransfer.files[0];
+  if(f) chargerProjet(f);
+};
+fprj.onchange=e=>{ if(e.target.files[0]) chargerProjet(e.target.files[0]); };
+
+async function chargerProjet(f){
+  try{
+    if(f.name.toLowerCase().endsWith('.html')){
+      statut('Lecture de la sauvegarde…');
+      const tx=await f.text();
+      const m=tx.match(/<script id="d0" type="application\/json">([\s\S]*?)<\/script>/);
+      if(!m || m[1].trim()==='null')
+        throw new Error("pas de données : ce fichier n'est pas une sauvegarde de l'outil");
+      const data=JSON.parse(m[1]);
+      if(!data.rooms) throw new Error('sauvegarde invalide');
+      const mb=tx.match(/id="bg"[^>]*src="(data:image\/jpeg;base64,[^"]+)"/);
+      if(!mb) throw new Error('fond de plan introuvable dans le fichier');
+      pdfDoc=null;
+      ouvrirEditeur(data, mb[1]);
+    } else {
+      statut('Projet V2 : lecture…');
+      const j=JSON.parse(await f.text());
+      if(j.format!=='projet_stc') throw new Error("ce JSON n'est pas un projet STC sauvegardé");
+      const bin=Uint8Array.from(atob(j.pdf_b64), c=>c.charCodeAt(0));
+      statut('Re-rendu du plan depuis le PDF embarqué…');
+      pdfDoc=await pdfjsLib.getDocument({data:bin}).promise;
+      pdfNom=j.nom||'projet';
+      pageChoisie=j.page_no||0;
+      const page=await pdfDoc.getPage(pageChoisie+1);
+      const payload=j.payload;
+      payload.sheet=j.nom; payload.echelle=j.echelle||100; payload.finesse=j.finesse??4;
+      payload.etat_client=j.etat_client||null;
+      const bg=await MOTEUR.rendreFond(page, payload.clip);
+      ouvrirEditeur(payload, bg);
+    }
+    statut('');
+  }catch(e){ statut('Échec ouverture projet : '+(e.message||e), true); }
+}
+
+async function chargerPDF(f){
+  try{
+    statut('Lecture du PDF…');
+    const buf=await f.arrayBuffer();
+    pdfDoc=await pdfjsLib.getDocument({data:buf}).promise;
+    pdfNom=f.name;
+    document.getElementById('drop').style.display='none';
+    document.getElementById('pdfinfo').style.display='flex';
+    document.getElementById('btnchangepdf').style.display='';
+    document.getElementById('step1').classList.add('done');
+    document.getElementById('step1').innerHTML=ICO_CHECK;
+    document.getElementById('pdfnom').textContent=f.name;
+    document.getElementById('pdfmeta').textContent=
+      (f.size/1e6).toFixed(1).replace('.',',')+' Mo · '+pdfDoc.numPages+
+      ' page'+(pdfDoc.numPages>1?'s':'');
+    await montrerVignettes();
+    document.getElementById('card_page').style.display='';
+    acc.params.style.display='';
+    statut('Choisissez la page — un niveau par page — puis lancez l\'analyse.');
+  }catch(e){ statut('Échec : '+e.message, true); }
+}
+async function montrerVignettes(){
+  acc.vig.innerHTML='';
+  pageChoisie=0;
+  for(let i=1;i<=pdfDoc.numPages;i++){
+    const div=document.createElement('div');
+    div.className='pg'+(i===1?' on':'');
+    div.dataset.p=i-1;
+    div.innerHTML='<div style="height:56px;background:#f2f3f5;border-radius:2px"></div>'+
+      '<div style="margin-top:4px">Page '+i+'</div>';
+    div.onclick=()=>{
+      pageChoisie=+div.dataset.p;
+      for(const d of acc.vig.children) d.classList.toggle('on', d===div);
+      majPageChoisie();
+    };
+    acc.vig.appendChild(div);
+  }
+  majPageChoisie();
+  for(let i=1;i<=pdfDoc.numPages;i++){
+    const page=await pdfDoc.getPage(i);
+    const vp0=page.getViewport({scale:1});
+    const z=160/vp0.width;
+    const vp=page.getViewport({scale:z});
+    const c=document.createElement('canvas');
+    c.width=Math.round(vp.width); c.height=Math.round(vp.height);
+    await page.render({canvasContext:c.getContext('2d'), viewport:vp}).promise;
+    const div=acc.vig.children[i-1];
+    div.innerHTML='';
+    div.appendChild(c);
+    const t=document.createElement('div');
+    t.style.marginTop='4px'; t.textContent='Page '+i;
+    div.appendChild(t);
+  }
+}
+// libelles de l'accueil qui suivent la page choisie et la finesse
+function majPageChoisie(){
+  const n=pageChoisie+1;
+  const e=document.getElementById('pagesel'); if(e) e.textContent='Page '+n+' sélectionnée';
+  const b=document.getElementById('btnanalyser_txt'); if(b) b.textContent='Analyser la page '+n;
+}
+const MOTS_FINESSE={1:'très fin',2:'très fin',3:'fin',4:'équilibré',5:'équilibré',
+                    6:'large',7:'large',8:'très large',9:'très large'};
+function majFinesse(v){
+  document.getElementById('fval').textContent=v;
+  document.getElementById('fmot').textContent=MOTS_FINESSE[v]||'';
+}
+// ouverture des onglets qui ne demandent pas de plan
+function ouvrirSansPlan(v){
+  document.getElementById('accueil').style.display='none';
+  document.getElementById('approot').style.display='flex';
+  if(!calcState) calcInit();
+  setView(v);
+  majChrome();
+}
+document.getElementById('btnanalyser').onclick=()=>lancerAnalyse(pageChoisie,
+  +document.getElementById('finesse').value, +document.getElementById('echelle').value||100);
+
+async function lancerAnalyse(pageNo, finesse, echelle){
+  try{
+    document.getElementById('btnanalyser').disabled=true;
+    statut('Extraction vectorielle…');
+    const page=await pdfDoc.getPage(pageNo+1);
+    const extr=await MOTEUR.extraire(page);
+    const payload=await MOTEUR.analyser(extr, finesse, echelle, statut);
+    statut('Rendu du fond de plan…');
+    const bg=await MOTEUR.rendreFond(page, payload.clip);
+    payload.sheet=pdfNom;
+    ouvrirEditeur(payload, bg);
+    statut('');
+  }catch(e){
+    console.error(e);
+    statut('Échec : '+(e.message||e), true);
+  }finally{
+    document.getElementById('btnanalyser').disabled=false;
+  }
+}
+function relancer(){
+  if(!pdfDoc) return;
+  retourEditeurApresAnalyse=true;
+  document.getElementById('approot').style.display='none';
+  document.getElementById('accueil').style.display='flex';
+  lancerAnalyse(pageChoisie, +document.getElementById('srv_f').value,
+                D&&D.echelle||100);
+}
+function retourAccueil(){
+  document.getElementById('approot').style.display='none';
+  document.getElementById('accueil').style.display='flex';
+}
+let retourEditeurApresAnalyse=false;
+
+// ================== editeur ==================
+let D=null;
+let PT_PER_M=28.35;
+const COLORS={25:'#CDDC39',30:'#8BC34A',35:'#4CAF50',40:'#2196F3',45:'#FF9800',50:'#F44336',55:'#9C27B0',60:'#6A1B9A'};
+const STC_PORTES=[25,30,35,40,45,50];
+const CATFIX={prive:'#2a78d6',collaboratif:'#008300',conference:'#eda100',
+              circulation:'#1baf7a',technique:'#e34948',confidentiel:'#4a3aa7'};
+const CATPAL=['#2a78d6','#008300','#eda100','#1baf7a','#e34948','#4a3aa7','#e87ba4','#eb6834'];
+function catColor(c){
+  if(CATFIX[c]) return CATFIX[c];
+  const autres=D.cats.filter(x=>!CATFIX[x]), i=autres.indexOf(c);
+  return i<0 ? '#eb6834' : CATPAL[(6+i)%CATPAL.length];
+}
+const HINTS={
+  select:'clic trait = édition (poignées · glisser · Suppr) · clic pièce = catégorie · clic porte = STC porte · glisser fond = main · Ctrl+molette = zoom',
+  add:'cliquer-glisser pour tracer — aimanté aux extrémités et alignements (Shift = horiz/vert strict)',
+  rooms:'clic pièce puis glisser les sommets · double-clic bord = point · Alt+clic point = supprimer',
+  addroom:'cliquer-glisser pour tracer le rectangle du nouvel espace',
+  addporte:'clic charnière puis glisser le vantail (clic simple = 0,9 m) · porte sélectionnée : 2 poignées aimantées aux cloisons · Suppr = effacer',
+  calib:'calibrage : cliquez 2 points d’une cote connue, puis saisissez la distance réelle en mètres'};
+const svg=document.getElementById('ov');
+const SVGNS='http://www.w3.org/2000/svg';
+let P=[], mode='select', scale=1, selRoom=null, selPair=null, selSeg=null, drag=null;
+let pan=null, suppressClick=false, zonage=false, portes_aff=true;
+let lastSTC=45, lastSTCPorte=30, selPorte=null, snapPt=null, snapGx=null, snapGy=null;
+const SNAP=5, ALIGN=3;
+let state=null, nrCount=0, curTab='val', calcState=null;
+
+function autresExtremites(exclu){
+  const pts=[];
+  for(const p of P) for(const s of p.segments) if(s!==exclu){ pts.push(s.p1,s.p2); }
+  for(const m of state.manual) if(m!==exclu){ pts.push(m.p1,m.p2); }
+  return pts;
+}
+// contexte d'accrochage type SketchUp : extrémités (accroche-point) + rails des
+// cloisons existantes (plans H/V exacts) et alignements sur leurs extrémités
+function snapCtx(exclu){
+  const pts=[], xs=[], ys=[];
+  const add=s=>{ if(s===exclu) return;
+    pts.push(s.p1,s.p2);
+    const dx=Math.abs(s.p2[0]-s.p1[0]), dy=Math.abs(s.p2[1]-s.p1[1]);
+    if(dx<=dy) xs.push((s.p1[0]+s.p2[0])/2);      // cloison verticale -> rail X
+    if(dy<=dx) ys.push((s.p1[1]+s.p2[1])/2);      // cloison horizontale -> rail Y
+  };
+  for(const p of P) for(const s of p.segments) add(s);
+  for(const m of state.manual) add(m);
+  for(const q of pts){ xs.push(q[0]); ys.push(q[1]); }   // alignements d'extrémités
+  return {pts, xs, ys};
+}
+function aimantePoint(x, y, autre, ctx, shift){
+  // accroche : extrémité (cercle rose) > rail/guide d'alignement > ortho doux vs `autre`
+  if(Array.isArray(ctx)) ctx={pts:ctx, xs:ctx.map(q=>q[0]), ys:ctx.map(q=>q[1])};
+  snapPt=null; snapGx=snapGy=null;
+  let best=null, bd=SNAP;
+  for(const q of ctx.pts){ const d=Math.hypot(q[0]-x,q[1]-y); if(d<bd){bd=d;best=q;} }
+  if(best && !shift){ snapPt=best; return [best[0],best[1]]; }
+  if(shift){
+    if(Math.abs(x-autre[0])>Math.abs(y-autre[1])) y=autre[1]; else x=autre[0];
+    return [x,y];
+  }
+  let ax=null, ay=null, ddx=ALIGN, ddy=ALIGN;
+  for(const vx of ctx.xs){ const d=Math.abs(vx-x); if(d<ddx){ ddx=d; ax=vx; } }
+  for(const vy of ctx.ys){ const d=Math.abs(vy-y); if(d<ddy){ ddy=d; ay=vy; } }
+  if(ax!==null){ x=ax; snapGx=ax; }
+  if(ay!==null){ y=ay; snapGy=ay; }
+  if(Math.abs(x-autre[0])>Math.abs(y-autre[1])){ if(ay===null && Math.abs(y-autre[1])<3) y=autre[1]; }
+  else { if(ax===null && Math.abs(x-autre[0])<3) x=autre[0]; }
+  return [x,y];
+}
+function roomInfo(c){ return D.rooms[c] || state.newRooms[c]; }
+function polyArea(pts){ let a=0;
+  for(let i=0;i<pts.length;i++){ const [x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length];
+    a+=x1*y2-x2*y1; }
+  return Math.round(Math.abs(a)/2/(PT_PER_M*PT_PER_M)*10)/10; }
+function initPairs(geo){
+  P=D.pairs.map(p=>{
+    const src=(geo&&geo[p.ca+'_'+p.cb])||p.segments;
+    return {...p, segments:src.map(s=>({...s,p1:[...s.p1],p2:[...s.p2]}))};
+  });
+}
+function segMeta(s){
+  const dx=s.p2[0]-s.p1[0], dy=s.p2[1]-s.p1[1];
+  s.len_m=Math.round(Math.hypot(dx,dy)/PT_PER_M*10)/10;
+  s.horiz=Math.abs(dx)>=Math.abs(dy);
+  s.cx=Math.round((s.p1[0]+s.p2[0])/2*10)/10;
+  s.cy=Math.round((s.p1[1]+s.p2[1])/2*10)/10;
+}
+function colorOf(v){ const ks=Object.keys(COLORS).map(Number).sort((a,b)=>a-b);
+  let best=ks[0]; for(const k of ks) if(v>=k) best=k; return COLORS[best]; }
+function pairKey(p){ return p.ca+'_'+p.cb; }
+function stcOf(p){ const k=pairKey(p);
+  if(state.overrides[k]!=null) return state.overrides[k];
+  const key=[state.cats[p.ca],state.cats[p.cb]].sort().join('|');
+  return state.matrix[key] ?? 45; }
+function el(tag,attrs){ const e=document.createElementNS(SVGNS,tag);
+  for(const[k,v] of Object.entries(attrs)) e.setAttribute(k,v); return e; }
+function svgPt(evt){ const pt=svg.createSVGPoint(); pt.x=evt.clientX; pt.y=evt.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse()); }
+function setZonage(v){ zonage=v;
+  document.getElementById('m_zone').classList.toggle('on', zonage);
+  document.getElementById('dot_zone').style.cssText =
+    zonage ? 'background:#1baf7a' : 'border:1.5px solid #7f8bab';
+  document.getElementById('legzone').style.display = zonage ? '' : 'none';
+  render(); }
+function setPortes(v){ portes_aff=v;
+  document.getElementById('m_portes').classList.toggle('on', v);
+  document.getElementById('dot_portes').style.cssText =
+    v ? 'background:#fff' : 'border:1.5px solid #7f8bab';
+  render(); }
+const MODES=['select','add','rooms','addroom','addporte','calib'];
+function setMode(m){ mode=m; selSeg=null; selPorte=null; drag=null; calibA=null;
+  for(const b of MODES) document.getElementById('m_'+b).classList.toggle('on', b===m);
+  majHint();
+  document.getElementById('plan').style.cursor =
+    (m==='add'||m==='addroom'||m==='addporte'||m==='calib') ? 'crosshair' : 'grab';
+  if(m==='addporte') setPortes(true);
+  render(); panel(); }
+// l'aide du mode courant vit dans la barre d'etat : plus rien n'est tronque
+function majHint(){
+  const h=document.getElementById('hint'); if(!h) return;
+  h.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3b82f6"'+
+    ' stroke-width="2" stroke-linecap="round" class="ico"><use href="#i-clock"/></svg>'+
+    '<span>'+NOMS_MODE[mode]+' — '+HINTS[mode]+'</span>';
+}
+const NOMS_MODE={select:'Sélection', add:'Cloison', rooms:'Pièce', addroom:'Espace',
+                 addporte:'Porte', calib:'Échelle'};
+function setTab(t){
+  for(const x of ['val','qty']){
+    document.getElementById('tab'+x).style.display =
+      (t===x) ? (x==='val'?'flex':'block') : 'none';
+    document.getElementById('t_'+x).classList.toggle('on', t===x);
+  }
+  curTab=t;
+  if(t==='qty') majMetres();
+  if(state) render(); }
+// ---- vues primaires plein écran (ruban) : Plan / STCc / Bonnes pratiques ----
+let curView='plan';
+function setView(v){
+  curView=v;
+  fermerMenus();
+  const map={plan:'ws_plan', calc:'ws_calc', doc:'ws_doc'};
+  for(const k in map){
+    const on=(k===v);
+    document.getElementById(map[k]).style.display = on ? (k==='plan'?'flex':'block') : 'none';
+    document.getElementById('nav_'+k).classList.toggle('on', on);
+  }
+  if(v==='calc') majCalc();
+  if(v==='plan' && state) render();
+}
+function drawSeg(s, col, ex, onclick, isSel){
+  const ln=el('line',{x1:s.p1[0],y1:s.p1[1],x2:s.p2[0],y2:s.p2[1],stroke:col,
+    'stroke-width':isSel?6:4,'class':'seg'+(ex?' excl':''),'stroke-opacity':.9});
+  ln.addEventListener('mousedown',e=>{ e.stopPropagation(); onclick(e);
+    if(mode==='select'){ const p=svgPt(e);
+      drag={type:'line',s,ox:p.x,oy:p.y,p1:[...s.p1],p2:[...s.p2]}; e.preventDefault(); }});
+  svg.appendChild(ln);
+  return ln;
+}
+function drawHandles(s){
+  [['p1',0],['p2',1]].forEach(([w])=>{
+    const h=el('circle',{cx:s[w][0],cy:s[w][1],r:5,'class':'hnd'});
+    h.addEventListener('mousedown',e=>{ drag={type:'end',s,w}; e.stopPropagation(); e.preventDefault(); });
+    svg.appendChild(h);
+  });
+}
+function render(){
+  svg.innerHTML='';
+  for(const [c,pts] of Object.entries(state.polys)){
+    const cls='room'+((mode==='select'||mode==='rooms')?' clickable':'')
+      +(selRoom===c?' sel':'')+(zonage?' zoned':'');
+    const poly=el('polygon',{points:pts.map(p=>p.join(',')).join(' '),'class':cls});
+    if(zonage) poly.style.fill=catColor(state.cats[c]);
+    if(mode==='select'||mode==='rooms')
+      poly.onclick=()=>{ if(suppressClick) return;
+        selRoom=c; selPair=null; selSeg=null; selPorte=null; render(); panel(); };
+    if(mode==='rooms' && selRoom===c)
+      poly.addEventListener('dblclick',e=>{ insertVertex(c,svgPt(e)); });
+    svg.appendChild(poly);
+  }
+  // surbrillance de la cloison sélectionnée — active uniquement dans l'onglet Métrés
+  if(curTab==='qty'){
+    let hlSegs=null;
+    if(selPair) hlSegs=selPair.segments;
+    else if(selSeg) hlSegs=[selSeg.s];
+    if(hlSegs) for(const s of hlSegs)
+      svg.appendChild(el('line',{x1:s.p1[0],y1:s.p1[1],x2:s.p2[0],y2:s.p2[1],
+        stroke:'#ffd200','stroke-width':12,'stroke-linecap':'round','stroke-opacity':.85}));
+  }
+  for(const p of P){
+    const v=stcOf(p), col=colorOf(v), k=pairKey(p), ex=state.excluded[k];
+    let labeled=false;
+    const segs=[...p.segments].sort((a,b)=>b.len_m-a.len_m);
+    for(const s of segs){
+      const isSel = selSeg && selSeg.s===s;
+      drawSeg(s,col,ex,()=>{ selPair=p; selRoom=null; selPorte=null;
+        selSeg=(mode==='select')?{s,pair:p}:null; render(); panel(); }, isSel);
+      if(!labeled && s.len_m>=1 && !ex){
+        addLabel(s,col,'STC '+v,()=>{ selPair=p; selRoom=null; selPorte=null;
+          selSeg=(mode==='select')?{s,pair:p}:null; render(); panel(); });
+        labeled=true;
+      }
+    }
+  }
+  for(const m of state.manual){
+    const col=colorOf(m.stc);
+    const isSel = selSeg && selSeg.s===m;
+    drawSeg(m,col,false,()=>{ selPair=null; selRoom=null; selPorte=null;
+      selSeg={s:m,manual:true}; render(); panel(); }, isSel);
+    if(m.len_m>=0.6) addLabel(m,col,'STC '+m.stc,()=>{ selPair=null; selRoom=null; selPorte=null;
+      selSeg={s:m,manual:true}; render(); panel(); });
+  }
+  if(portes_aff){
+    (D.portes||[]).forEach((pt,i)=>{
+      const stcP=state.portesEtat[i];
+      const selp=(selPorte&&selPorte.det===i)||(selPair&&pt.pair===pairKey(selPair));
+      const col=stcP!=null?colorOf(stcP):'#8d6e63';
+      const c=el('circle',{cx:pt.x,cy:pt.y,r:selp?5.5:4,fill:col,
+        stroke:selp?'#1e6fd9':'#fff','stroke-width':selp?2:1.2,'fill-opacity':.95,
+        style:'cursor:pointer'});
+      const t=document.createElementNS(SVGNS,'title');
+      t.textContent='Porte '+(pt.r_m||'?')+' m'+(stcP!=null?' — STC '+stcP:'')+
+        (pt.pair?'':' (non rattachée à une cloison)');
+      c.appendChild(t);
+      c.addEventListener('mousedown',e=>{ e.stopPropagation();
+        selPorte={det:i}; selPair=selRoom=null; selSeg=null; render(); panel(); });
+      svg.appendChild(c);
+      if(stcP!=null){
+        const g=el('g',{'class':'lbl'});
+        g.appendChild(el('rect',{x:pt.x+5,y:pt.y-13,width:26,height:11,rx:2,fill:col}));
+        const tx=el('text',{x:pt.x+18,y:pt.y-4.4,'text-anchor':'middle','font-size':'8',
+          'font-weight':'bold',fill:'#fff'});
+        tx.textContent='P '+stcP; g.appendChild(tx);
+        g.addEventListener('mousedown',e=>{ e.stopPropagation();
+          selPorte={det:i}; selPair=selRoom=null; selSeg=null; render(); panel(); });
+        svg.appendChild(g);
+      }
+    });
+    for(const pm of state.portes_man){
+      const col=colorOf(pm.stc), isSel=selPorte&&selPorte.man===pm;
+      const dx=pm.lx-pm.x, dy=pm.ly-pm.y, r=Math.hypot(dx,dy)||1;
+      const ex=pm.x-dy, ey=pm.y+dx;   // bout du vantail pivote de 90°
+      const g=el('g',{});
+      g.appendChild(el('line',{x1:pm.x,y1:pm.y,x2:pm.lx,y2:pm.ly,stroke:col,
+        'stroke-width':isSel?3.5:2.5}));
+      g.appendChild(el('path',{d:`M ${pm.lx} ${pm.ly} A ${r} ${r} 0 0 1 ${ex} ${ey}`,
+        fill:'none',stroke:col,'stroke-width':1.2,'stroke-dasharray':'4 3'}));
+      g.appendChild(el('circle',{cx:pm.x,cy:pm.y,r:isSel?4:3,fill:col,
+        stroke:isSel?'#1e6fd9':'#fff','stroke-width':isSel?2:1}));
+      const lg=el('g',{'class':'lbl'});
+      lg.appendChild(el('rect',{x:pm.x+5,y:pm.y+4,width:26,height:11,rx:2,fill:col}));
+      const tx=el('text',{x:pm.x+18,y:pm.y+12.6,'text-anchor':'middle','font-size':'8',
+        'font-weight':'bold',fill:'#fff'});
+      tx.textContent='P '+pm.stc; lg.appendChild(tx);
+      g.appendChild(lg);
+      g.style.cursor='pointer';
+      g.addEventListener('mousedown',e=>{ e.stopPropagation();
+        selPorte={man:pm}; selPair=selRoom=null; selSeg=null;
+        if(mode==='select'){ const p=svgPt(e);
+          drag={type:'porte-move',pm,ox:p.x,oy:p.y,x:pm.x,y:pm.y,lx:pm.lx,ly:pm.ly}; }
+        e.preventDefault(); render(); panel(); });
+      svg.appendChild(g);
+      if(isSel){
+        const h1=el('circle',{cx:pm.x,cy:pm.y,r:5,'class':'hnd'});
+        h1.addEventListener('mousedown',e=>{ drag={type:'porte-hinge',pm};
+          e.stopPropagation(); e.preventDefault(); });
+        svg.appendChild(h1);
+        const h2=el('circle',{cx:pm.lx,cy:pm.ly,r:5,'class':'hnd'});
+        h2.addEventListener('mousedown',e=>{ drag={type:'porte',pm};
+          e.stopPropagation(); e.preventDefault(); });
+        svg.appendChild(h2);
+      }
+    }
+  }
+  const vb=svg.viewBox.baseVal;
+  if(snapGx!=null) svg.appendChild(el('line',{x1:snapGx,y1:vb.y,x2:snapGx,y2:vb.y+vb.height,
+    stroke:'#e91e63','stroke-width':1,'stroke-dasharray':'5 4','stroke-opacity':.7}));
+  if(snapGy!=null) svg.appendChild(el('line',{x1:vb.x,y1:snapGy,x2:vb.x+vb.width,y2:snapGy,
+    stroke:'#e91e63','stroke-width':1,'stroke-dasharray':'5 4','stroke-opacity':.7}));
+  if(snapPt) svg.appendChild(el('circle',{cx:snapPt[0],cy:snapPt[1],r:7,fill:'none',
+    stroke:'#e91e63','stroke-width':2}));
+  if(mode==='calib' && calibA){
+    svg.appendChild(el('circle',{cx:calibA[0],cy:calibA[1],r:6,fill:'none',
+      stroke:'#1e6fd9','stroke-width':2}));
+    svg.appendChild(el('line',{x1:calibA[0]-9,y1:calibA[1],x2:calibA[0]+9,y2:calibA[1],
+      stroke:'#1e6fd9','stroke-width':1.5}));
+    svg.appendChild(el('line',{x1:calibA[0],y1:calibA[1]-9,x2:calibA[0],y2:calibA[1]+9,
+      stroke:'#1e6fd9','stroke-width':1.5}));
+  }
+  if(selSeg && mode!=='rooms') drawHandles(selSeg.s);
+  if(mode==='rooms' && selRoom && state.polys[selRoom]){
+    state.polys[selRoom].forEach((pt,i)=>{
+      const h=el('rect',{x:pt[0]-3.5,y:pt[1]-3.5,width:7,height:7,'class':'hnd vx'});
+      h.addEventListener('mousedown',e=>{
+        if(e.altKey){ if(state.polys[selRoom].length>3){ state.polys[selRoom].splice(i,1); render(); } }
+        else drag={type:'vx',comp:selRoom,i};
+        e.stopPropagation(); e.preventDefault(); });
+      svg.appendChild(h);
+    });
+  }
+}
+function addLabel(s,col,txt,onclick){
+  const ox=s.horiz?0:14, oy=s.horiz?12:0;
+  const g=el('g',{'class':'lbl'});
+  g.appendChild(el('rect',{x:s.cx-15+ox,y:s.cy-6+oy,width:30,height:11,rx:2,fill:col}));
+  const t=el('text',{x:s.cx+ox,y:s.cy+2.6+oy,'text-anchor':'middle','font-size':'8',
+    'font-weight':'bold',fill:'#fff'});
+  t.textContent=txt; g.appendChild(t);
+  g.addEventListener('mousedown',e=>{ onclick(); e.stopPropagation(); });
+  svg.appendChild(g);
+}
+function insertVertex(comp,pt){
+  const pts=state.polys[comp]; let bi=0,bd=1e12;
+  for(let i=0;i<pts.length;i++){
+    const a=pts[i], b=pts[(i+1)%pts.length];
+    const t=Math.max(0,Math.min(1,((pt.x-a[0])*(b[0]-a[0])+(pt.y-a[1])*(b[1]-a[1]))/
+      (((b[0]-a[0])**2+(b[1]-a[1])**2)||1)));
+    const d=(pt.x-(a[0]+t*(b[0]-a[0])))**2+(pt.y-(a[1]+t*(b[1]-a[1])))**2;
+    if(d<bd){bd=d;bi=i;}
+  }
+  pts.splice(bi+1,0,[Math.round(pt.x*10)/10,Math.round(pt.y*10)/10]);
+  render();
+}
+// capture l'état AVANT toute action souris (phase de capture, avant les handlers)
+svg.addEventListener('mousedown',()=>{ if(state) _snap=snapState(); }, true);
+svg.addEventListener('mousedown',e=>{
+  if(!state) return;
+  if(mode==='calib'){
+    const p=svgPt(e);
+    if(!calibA){ calibA=[p.x,p.y]; render(); }
+    else{
+      const dpx=Math.hypot(p.x-calibA[0], p.y-calibA[1]);
+      const rep=prompt('Distance réelle entre les deux points cliqués (en mètres) :','');
+      const mm=rep!=null && parseFloat(String(rep).replace(',','.'));
+      if(mm && mm>0 && dpx>1) appliquerEchelle(dpx/mm);
+      calibA=null; setMode('select');
+    }
+    e.preventDefault(); return;
+  }
+  if(mode==='add' && !drag){
+    const p=svgPt(e);
+    let sx=p.x, sy=p.y, best=null, bd=SNAP;
+    for(const q of autresExtremites(null)){
+      const d=Math.hypot(q[0]-sx,q[1]-sy); if(d<bd){bd=d;best=q;} }
+    if(best){ sx=best[0]; sy=best[1]; }
+    const m={p1:[sx,sy],p2:[sx,sy],stc:lastSTC}; segMeta(m);
+    state.manual.push(m); drag={type:'end',s:m,w:'p2',isNew:true};
+    selSeg={s:m,manual:true}; selPair=null; selRoom=null; selPorte=null;
+    e.preventDefault(); return;
+  }
+  if(mode==='addporte' && !drag){
+    const p=svgPt(e);
+    const pm={x:Math.round(p.x*10)/10, y:Math.round(p.y*10)/10,
+              lx:p.x, ly:p.y, stc:lastSTCPorte};
+    state.portes_man.push(pm);
+    drag={type:'porte',pm,isNew:true};
+    selPorte={man:pm}; selPair=selRoom=null; selSeg=null;
+    e.preventDefault(); return;
+  }
+  if(mode==='addroom' && !drag){
+    const p=svgPt(e);
+    const id='NR'+(++nrCount);
+    state.newRooms[id]={num:id,name:'Nouvel espace',cat:'prive',
+                        area_decl:null,area_det:0};
+    state.cats[id]='prive';
+    state.polys[id]=[[p.x,p.y],[p.x,p.y],[p.x,p.y],[p.x,p.y]];
+    drag={type:'room-rect',id,x0:p.x,y0:p.y};
+    e.preventDefault(); return;
+  }
+  if(!drag){
+    pan={x:e.clientX,y:e.clientY,sl:planDiv.scrollLeft,st:planDiv.scrollTop,moved:false};
+    planDiv.style.cursor='grabbing'; e.preventDefault();
+  }});
+window.addEventListener('mousemove',e=>{
+  if(pan){
+    const dx=e.clientX-pan.x, dy=e.clientY-pan.y;
+    if(Math.abs(dx)+Math.abs(dy)>4){ pan.moved=true; suppressClick=true; }
+    planDiv.scrollLeft=pan.sl-dx; planDiv.scrollTop=pan.st-dy;
+    return;
+  }
+  if(!drag) return;
+  const p=svgPt(e);
+  if(drag.type==='end'){
+    const s=drag.s, o=(drag.w==='p1')?s.p2:s.p1;
+    const [x,y]=aimantePoint(p.x, p.y, o, snapCtx(s), e.shiftKey);
+    s[drag.w]=[Math.round(x*10)/10,Math.round(y*10)/10]; segMeta(s);
+  } else if(drag.type==='line'){
+    let dx=p.x-drag.ox, dy=p.y-drag.oy;
+    if(e.shiftKey){ if(Math.abs(dx)>Math.abs(dy)) dy=0; else dx=0; }
+    const s=drag.s;
+    s.p1=[drag.p1[0]+dx,drag.p1[1]+dy]; s.p2=[drag.p2[0]+dx,drag.p2[1]+dy]; segMeta(s);
+  } else if(drag.type==='porte'){
+    const pm=drag.pm;
+    const [x,y]=aimantePoint(p.x, p.y, [pm.x,pm.y], snapCtx(null), e.shiftKey);
+    pm.lx=Math.round(x*10)/10; pm.ly=Math.round(y*10)/10;
+  } else if(drag.type==='porte-hinge'){
+    const pm=drag.pm;
+    const [x,y]=aimantePoint(p.x, p.y, [pm.lx,pm.ly], snapCtx(null), e.shiftKey);
+    pm.x=Math.round(x*10)/10; pm.y=Math.round(y*10)/10;
+  } else if(drag.type==='porte-move'){
+    const pm=drag.pm, dx=p.x-drag.ox, dy=p.y-drag.oy;
+    pm.x=Math.round((drag.x+dx)*10)/10; pm.y=Math.round((drag.y+dy)*10)/10;
+    pm.lx=Math.round((drag.lx+dx)*10)/10; pm.ly=Math.round((drag.ly+dy)*10)/10;
+  } else if(drag.type==='vx'){
+    state.polys[drag.comp][drag.i]=[Math.round(p.x*10)/10,Math.round(p.y*10)/10];
+  } else if(drag.type==='room-rect'){
+    const x0=drag.x0,y0=drag.y0;
+    state.polys[drag.id]=[[x0,y0],[p.x,y0],[p.x,p.y],[x0,p.y]]
+      .map(q=>[Math.round(q[0]*10)/10,Math.round(q[1]*10)/10]);
+  }
+  render();
+});
+window.addEventListener('mouseup',()=>{
+  if(pan){ planDiv.style.cursor=(mode==='add')?'crosshair':'grab'; pan=null;
+    setTimeout(()=>{ suppressClick=false; },0); }
+  snapPt=null; snapGx=snapGy=null;
+  if(drag){
+    if(drag.type==='porte' && drag.isNew){
+      const pm=drag.pm;
+      if(Math.hypot(pm.lx-pm.x, pm.ly-pm.y) < 0.2*PT_PER_M){
+        pm.lx=Math.round((pm.x+0.9*PT_PER_M)*10)/10; pm.ly=pm.y;  // clic simple : 0,9 m
+      }
+    }
+    if(drag.isNew && drag.s && drag.s.len_m<0.3){ state.manual.pop(); selSeg=null; }
+    if(drag.type==='room-rect'){
+      const id=drag.id;
+      if(polyArea(state.polys[id])<0.5){
+        delete state.polys[id]; delete state.newRooms[id]; delete state.cats[id];
+      } else {
+        state.newRooms[id].area_det=polyArea(state.polys[id]);
+        selRoom=id; selPair=null; selSeg=null;
+      }
+    }
+    drag=null; render(); panel();
+  }
+  commitSnap();
+  });
+const TOUCHES_MODE={v:'select', c:'add', p:'rooms', n:'addroom', d:'addporte', m:'calib'};
+window.addEventListener('keydown',e=>{
+  const saisie=/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
+  if((e.ctrlKey||e.metaKey) && !e.altKey){
+    const k=e.key.toLowerCase();
+    if(k==='z' && !e.shiftKey){ e.preventDefault(); undo(); return; }
+    if(k==='y' || (k==='z' && e.shiftKey)){ e.preventDefault(); redo(); return; }
+    if(k==='s'){ e.preventDefault(); if(state) saveHTML(); return; }
+    return;
+  }
+  if(e.key==='Escape'){
+    if(document.getElementById('kbdlay').classList.contains('on')) return aideClavier(false);
+    if(document.querySelector('.menu.on,.pop.on')) return fermerMenus();
+    if(state && (selRoom||selPair||selSeg||selPorte)){
+      selRoom=selPair=selSeg=selPorte=null; render(); panel(); }
+    return;
+  }
+  if(saisie) return;
+  if(e.key==='?'){ e.preventDefault(); aideClavier(true); return; }
+  // raccourcis d'outil : seulement quand un plan est charge et visible
+  const t=TOUCHES_MODE[e.key.toLowerCase()];
+  if(t && state && curView==='plan'){ e.preventDefault(); setMode(t); return; }
+  if(e.key!=='Delete' || !state) return;
+  if(selPorte && selPorte.man){
+    pushUndo();
+    state.portes_man=state.portes_man.filter(x=>x!==selPorte.man);
+    selPorte=null; render(); panel(); return;
+  }
+  if(selSeg){
+    pushUndo();
+    if(selSeg.manual) state.manual=state.manual.filter(x=>x!==selSeg.s);
+    else if(selSeg.pair) selSeg.pair.segments=selSeg.pair.segments.filter(x=>x!==selSeg.s);
+    selSeg=null; render(); panel();
+  }});
+// Ossature constante : la carte de l'objet selectionne, puis ce qui en depend,
+// puis les actions sur cet objet. Seul le contenu change, jamais l'ordre.
+function ech(t){ return String(t==null?'':t)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fr(n, d){ return (Math.round(n*Math.pow(10,d||2))/Math.pow(10,d||2))
+  .toFixed(d||2).replace('.',','); }
+function carte(titre, sous, chip, corps, actions){
+  return '<div class="card" style="padding:12px">'+
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
+      '<div style="min-width:0"><h3>'+titre+'</h3>'+
+      (sous?'<div class="muted" style="margin-top:4px">'+sous+'</div>':'')+'</div>'+
+      (chip||'')+'</div>'+
+    (corps||'')+
+    (actions?'<div class="sel-actions">'+actions+'</div>':'')+
+  '</div>';
+}
+function chipSTC(v){ return '<span class="chip" style="background:'+colorOf(v)+
+  ';color:'+(v<=30?'#1b2440':'#fff')+'">STC '+v+'</span>'; }
+function selOptions(vals, cur, vide){
+  return (vide?'<option value="">'+vide+'</option>':'')+
+    vals.map(function(x){ return '<option '+(cur===x?'selected':'')+'>'+x+'</option>'; }).join('');
+}
+// rooms est indexe par chaine, pairs porte des codes numeriques : on compare
+// les deux sous forme de chaine plutot que de faire confiance au type.
+function memeCode(a, b){ return String(a)===String(b); }
+function cloisonsDeLaPiece(code){
+  return P.filter(function(p){ return memeCode(p.ca,code)||memeCode(p.cb,code); });
+}
+function panel(){
+  const s=document.getElementById('sel');
+  if(!state) return;
+  majConformite(); majMetres(); majStats();
+
+  if(selPorte){
+    const man=selPorte.man;
+    const cur=man?man.stc:state.portesEtat[selPorte.det];
+    const rm=man?Math.round(Math.hypot(man.lx-man.x,man.ly-man.y)/PT_PER_M*100)/100
+             :(D.portes[selPorte.det]||{}).r_m;
+    const pr=man?null:(D.portes[selPorte.det]||{}).pair;
+    const paire=pr?P.find(function(p){ return pairKey(p)===pr; }):null;
+    let corps='<div style="margin-top:12px"><div class="muted" style="margin-bottom:4px">'+
+      'Affaiblissement de la porte</div><div style="display:flex;gap:4px" id="pstcgrp">'+
+      STC_PORTES.map(function(x){ return '<button class="segbtn'+(cur===x?' on':'')+
+        '" data-v="'+x+'">'+x+'</button>'; }).join('')+'</div></div>';
+    if(paire){
+      const cp=compositePaire(paire);
+      if(cp.comp!=null){
+        const bad=cp.comp<cp.target-0.5;
+        corps+='<div style="margin-top:12px;padding:12px;border-radius:5px;background:'+
+          (bad?'rgba(192,57,43,.12)':'rgba(46,125,82,.14)')+';border:1px solid '+
+          (bad?'rgba(192,57,43,.35)':'rgba(46,125,82,.4)')+'">'+
+          '<div class="num" style="color:'+(bad?'var(--err)':'var(--ok)')+
+          ';font-weight:600">Composite '+fr(cp.comp,1)+' pour une cible '+cp.target+'</div>'+
+          '<div class="muted" style="margin-top:6px">'+conseilPorte(paire, cp)+'</div>'+
+          '<div style="display:flex;gap:8px;margin-top:8px"><button class="sec" style="height:28px"'+
+          ' onclick="calcDepuisPaire()">Ouvrir dans le calculateur</button></div></div>';
+      }
+    }
+    corps+='<div class="muted" style="margin-top:12px">Viser STC porte ≥ STC de la cloison − 10 ; '+
+      'l\'étanchéité périphérique — joints, seuil — pilote le résultat réel.</div>';
+    s.innerHTML=carte(man?'Porte manuelle':'Porte détectée',
+      'Vantail '+(rm==null?'?':fr(rm))+' m'+(paire?' · sur la cloison '+ech(paire.a)+' ↔ '+ech(paire.b):''),
+      cur!=null?chipSTC(cur):'<span class="chip" style="background:#3d4763">non renseigné</span>',
+      corps,
+      (cur!=null?'<button class="sec" id="pclr">Retirer le STC</button>':'')+
+      (man?'<button class="warn" id="pdel">Supprimer</button>':''));
+    s.querySelectorAll('#pstcgrp button').forEach(function(b){ b.onclick=function(){
+      pushUndo();
+      const v=+b.dataset.v;
+      if(man) man.stc=v; else state.portesEtat[selPorte.det]=v;
+      lastSTCPorte=v; render(); panel(); }; });
+    const clr=s.querySelector('#pclr');
+    if(clr) clr.onclick=function(){ pushUndo();
+      if(man) man.stc=null; else delete state.portesEtat[selPorte.det];
+      render(); panel(); };
+    const pd=s.querySelector('#pdel');
+    if(pd) pd.onclick=function(){ pushUndo();
+      state.portes_man=state.portes_man.filter(function(x){ return x!==man; });
+      selPorte=null; render(); panel(); };
+    return;
+  }
+
+  if(selSeg && selSeg.manual){
+    const m=selSeg.s;
+    s.innerHTML=carte('Cloison manuelle', fr(m.len_m)+' m', chipSTC(m.stc),
+      '<div style="margin-top:12px"><div class="muted" style="margin-bottom:4px">Cible STC</div>'+
+      '<select id="mstc" style="width:100%">'+selOptions(STCOPTS, m.stc)+'</select></div>',
+      '<button class="warn" id="mdel">Supprimer</button>');
+    s.querySelector('#mstc').onchange=function(e){ pushUndo();
+      m.stc=+e.target.value; lastSTC=m.stc; render(); panel(); };
+    s.querySelector('#mdel').onclick=function(){ pushUndo();
+      state.manual=state.manual.filter(function(x){ return x!==m; });
+      selSeg=null; render(); panel(); };
+    return;
+  }
+
+  const p = (selSeg && selSeg.pair) ? selSeg.pair : (selPair || null);
+  if(p){
+    const k=pairKey(p), v=stcOf(p), seg=(selSeg&&selSeg.pair)?selSeg.s:null;
+    const len=seg?seg.len_m:p.segments.reduce(function(a,x){ return a+x.len_m; },0);
+    const H=+(document.getElementById('hsp')||{}).value||2.7;
+    const cp=compositePaire(p);
+    let corps='';
+    if(cp.portes){
+      corps+='<div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:8px;'+
+        'background:var(--panneau);border-radius:5px">'+
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f0a500"'+
+        ' stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-door"/></svg>'+
+        '<span style="color:var(--texte)">'+cp.portes+' porte'+(cp.portes>1?'s':'')+
+        ' sur cette cloison — viser STC porte ≥ '+(v-10)+'</span></div>';
+    }
+    corps+='<div style="display:flex;gap:8px;margin-top:12px">'+
+      '<div style="flex:1"><div class="muted" style="margin-bottom:4px">Cible forcée</div>'+
+      '<select id="ovr" style="width:100%">'+
+      selOptions(STCOPTS, state.overrides[k], '— matrice ('+matrixStc(p)+') —')+'</select></div>'+
+      '<div style="width:104px"><div class="muted" style="margin-bottom:4px">Composite</div>'+
+      '<div class="num" style="height:28px;border-radius:4px;background:var(--champ);'+
+      'border:1px solid '+(cp.comp!=null&&cp.comp<cp.target-0.5?'rgba(192,57,43,.6)':'rgba(255,255,255,.22)')+
+      ';color:'+(cp.comp!=null&&cp.comp<cp.target-0.5?'var(--err)':'var(--titre)')+
+      ';display:flex;align-items:center;justify-content:center;font-weight:600">'+
+      (cp.comp!=null?fr(cp.comp,1):(cp.unspec?'—':'n/a'))+'</div></div></div>';
+    if(cp.portes && cp.unspec)
+      corps+='<div class="muted" style="margin-top:8px;color:var(--warn)">'+
+        cp.unspec+' porte'+(cp.unspec>1?'s':'')+' sans STC : le composite reste incalculable.</div>';
+    else if(cp.comp!=null && cp.comp<cp.target-0.5)
+      corps+='<div class="muted" style="margin-top:8px">'+conseilPorte(p, cp)+'</div>';
+    s.innerHTML=carte('Cloison '+ech(p.a)+' ↔ '+ech(p.b),
+      ech(p.name_a)+' ↔ '+ech(p.name_b)+' · '+fr(len)+' m · h '+fr(H)+' m',
+      chipSTC(v), corps,
+      '<button class="sec" id="excl" style="flex:1">'+
+        (state.excluded[k]?'Réactiver la paire':'Ignorer la paire')+'</button>'+
+      (seg?'<button class="warn" id="sdel">Supprimer ce segment</button>':''));
+    s.querySelector('#ovr').onchange=function(e){ pushUndo();
+      if(e.target.value==='') delete state.overrides[k];
+      else { state.overrides[k]=+e.target.value; lastSTC=+e.target.value; }
+      render(); panel(); };
+    s.querySelector('#excl').onclick=function(){ pushUndo();
+      state.excluded[k]=!state.excluded[k]; render(); panel(); };
+    const sd=s.querySelector('#sdel');
+    if(sd) sd.onclick=function(){ pushUndo();
+      p.segments=p.segments.filter(function(x){ return x!==seg; });
+      selSeg=null; render(); panel(); };
+    return;
+  }
+
+  if(selRoom){
+    const r=roomInfo(selRoom); if(!r){ selRoom=null; return panel(); }
+    const isNew=!!state.newRooms[selRoom];
+    const surf=isNew?polyArea(state.polys[selRoom]):r.area_det;
+    const cat=state.cats[selRoom];
+    let corps='<div style="margin-top:12px"><div class="muted" style="margin-bottom:4px">'+
+      'Catégorie acoustique</div><div style="display:flex;flex-wrap:wrap;gap:6px" id="catgrp">'+
+      D.cats.map(function(c){
+        const on=(c===cat), col=catColor(c);
+        return '<button class="catbtn'+(on?' on':'')+'" data-c="'+ech(c)+'" style="'+
+          (on?'background:'+col+';color:'+(sombreHex(col)?'#fff':'#1b2440'):'')+'">'+
+          (on?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"'+
+              ' stroke-width="3.4" stroke-linecap="round" class="ico"><use href="#i-check"/></svg>'
+             :'<i style="background:'+col+'"></i>')+ech(c)+'</button>';
+      }).join('')+'</div>';
+    const cl=cloisonsDeLaPiece(selRoom);
+    if(cl.length){
+      const tot=cl.reduce(function(a,q){ return a+q.segments.reduce(function(b,x){ return b+x.len_m; },0); },0);
+      corps+='<div class="muted" style="margin-top:8px">Changer la catégorie recalcule '+
+        (cl.length>1?'les '+cl.length+' cloisons':'la cloison')+' de cette pièce.</div></div>'+
+        '<div class="card" style="padding:0;overflow:hidden;margin-top:12px">'+
+        '<div class="sechd">Cloisons de cette pièce'+
+        '<span class="muted num" style="font-weight:400">'+cl.length+' · '+fr(tot,1)+' m</span></div>'+
+        '<div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:4px">'+
+        cl.map(function(q,i){
+          const dedans = memeCode(q.ca, selRoom);
+          const autre = dedans ? q.b : q.a;
+          const nom   = dedans ? q.name_b : q.name_a;
+          const lg=q.segments.reduce(function(a,x){ return a+x.len_m; },0);
+          return '<div class="item" data-p="'+i+'" style="cursor:pointer'+
+            (lg<=0?';opacity:.55':'')+'" title="'+(lg<=0?'plus aucun segment tracé':'')+'">'+
+            '<span class="chip" style="background:'+colorOf(stcOf(q))+';color:'+
+            (stcOf(q)<=30?'#1b2440':'#fff')+'">'+stcOf(q)+'</span>'+
+            '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+            '↔ '+ech(autre)+' '+ech(nom)+'</span>'+
+            '<span class="muted num">'+fr(lg,1)+' m</span></div>';
+        }).join('')+'</div></div>';
+    } else corps+='</div>';
+    if(mode==='rooms')
+      corps+='<div class="card" style="padding:12px;margin-top:12px"><div class="muted">'+
+        'Mode <b style="color:var(--texte)">Pièce</b> actif : glissez les sommets bleus, '+
+        'double-clic sur un bord pour ajouter un point, Alt+clic pour en retirer un.</div></div>';
+    if(isNew)
+      corps='<div style="display:flex;gap:8px;margin-top:12px">'+
+        '<div style="width:88px"><div class="muted" style="margin-bottom:4px">N°</div>'+
+        '<input id="rnum" value="'+ech(r.num)+'" style="width:100%"></div>'+
+        '<div style="flex:1"><div class="muted" style="margin-bottom:4px">Nom</div>'+
+        '<input id="rname" value="'+ech(r.name)+'" style="width:100%"></div></div>'+corps;
+    s.innerHTML=carte(isNew?'Nouvel espace':ech(r.num)+' · '+ech(r.name),
+      (r.area_decl==null?'?':fr(r.area_decl,1))+' m² déclarés · '+fr(surf,1)+' m² '+
+        (isNew?'tracés':'détectés')+(r.escalier?' · cage d\'escalier détectée':''),
+      '<span class="chip" style="background:'+catColor(cat)+';color:'+
+        (sombreHex(catColor(cat))?'#fff':'#1b2440')+'">'+ech(cat)+'</span>',
+      corps,
+      isNew?'<button class="warn" id="rdel">Supprimer cet espace</button>':'');
+    s.querySelectorAll('#catgrp button').forEach(function(b){ b.onclick=function(){
+      pushUndo();
+      state.cats[selRoom]=b.dataset.c;
+      if(isNew) state.newRooms[selRoom].cat=b.dataset.c;
+      render(); panel(); }; });
+    s.querySelectorAll('.item[data-p]').forEach(function(row){ row.onclick=function(){
+      const q=cl[+row.dataset.p];
+      selPair=q; selRoom=selSeg=selPorte=null; render(); panel();
+      const g=q.segments[0]; if(g) centrerSur(g.cx,g.cy); }; });
+    if(isNew){
+      s.querySelector('#rnum').onchange=function(e){ pushUndo();
+        state.newRooms[selRoom].num=e.target.value; panel(); };
+      s.querySelector('#rname').onchange=function(e){ pushUndo();
+        state.newRooms[selRoom].name=e.target.value; panel(); };
+      s.querySelector('#rdel').onclick=function(){ pushUndo();
+        delete state.newRooms[selRoom]; delete state.polys[selRoom];
+        delete state.cats[selRoom]; selRoom=null; render(); panel(); };
+    }
+    return;
+  }
+
+  // rien de selectionne : l'etat du relevé, puis par ou commencer
+  const nbCl=P.filter(function(q){ return !state.excluded[pairKey(q)]; }).length+state.manual.length;
+  const ml=P.reduce(function(a,q){ return state.excluded[pairKey(q)] ? a :
+      a+q.segments.reduce(function(b,x){ return b+x.len_m; },0); },0)
+    +state.manual.reduce(function(a,m){ return a+m.len_m; },0);
+  const nbPortes=(D.portes||[]).length+state.portes_man.length;
+  const nbPieces=Object.keys(state.cats).length;
+  s.innerHTML='<div class="card" style="padding:12px"><h3>Relevé en cours</h3>'+
+    '<div style="display:flex;gap:8px;margin-top:12px">'+
+    '<div class="stat"><b>'+nbCl+'</b><div class="muted" style="font-size:10.5px;margin-top:4px">'+
+      'cloisons · '+fr(ml,1)+' m</div></div>'+
+    '<div class="stat"><b>'+nbPieces+'</b><div class="muted" style="font-size:10.5px;margin-top:4px">'+
+      'pièces classées</div></div>'+
+    '<div class="stat"><b>'+nbPortes+'</b><div class="muted" style="font-size:10.5px;margin-top:4px">'+
+      'portes</div></div></div></div>'+
+    demarrage();
+  s.querySelectorAll('.item[data-act]').forEach(function(it){ it.onclick=function(){
+    const a=it.dataset.act;
+    if(a==='weld') basculerMenu('pop_ac');
+    else if(a==='scale') setMode('calib');
+    else if(a==='door') setMode('select');
+  }; });
+}
+// suggestions d'ordre de travail, deduites de l'etat reel du releve
+function demarrage(){
+  const sansStc=(D.portes||[]).filter(function(pt,i){ return state.portesEtat[i]==null; }).length
+               +state.portes_man.filter(function(m){ return m.stc==null; }).length;
+  const items=[];
+  items.push(['weld','#i-weld','Nettoyer la géométrie','aligner et souder les extrémités']);
+  items.push(['scale','#i-scale','Vérifier l\'échelle','deux clics sur une cote connue']);
+  if(sansStc) items.push(['door','#i-door','Renseigner les portes',
+    sansStc+' porte'+(sansStc>1?'s':'')+' encore sans STC']);
+  return '<div class="card" style="padding:12px"><h3>Par où commencer</h3>'+
+    '<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">'+
+    items.map(function(it){
+      return '<div class="item" data-act="'+it[0]+'" style="cursor:pointer">'+
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8ab4ff"'+
+      ' stroke-width="1.8" stroke-linecap="round" class="ico"><use href="'+it[1]+'"/></svg>'+
+      '<div style="flex:1"><div style="color:var(--texte)">'+it[2]+'</div>'+
+      '<div class="muted" style="font-size:10.5px">'+it[3]+'</div></div></div>';
+    }).join('')+'</div></div>';
+}
+function sombreHex(h){
+  const n=parseInt(h.slice(1),16);
+  return (0.299*((n>>16)&255)+0.587*((n>>8)&255)+0.114*(n&255))/255 < 0.62;
+}
+// « une porte STC x remonte le composite a y » : on cherche le premier palier utile
+function conseilPorte(p, cp){
+  if(cp.comp==null) return 'Renseignez le STC des portes pour obtenir le composite.';
+  const H=+(document.getElementById('hsp')||{}).value||2.7, HD=Math.min(H,2.1);
+  const len=p.segments.reduce(function(a,s){ return a+s.len_m; },0);
+  const portes=portesDeLaPaire(p);
+  const target=cp.target;
+  let doorArea=0;
+  for(const d of portes) doorArea+=Math.max(0.1,d.w)*HD;
+  const mur=Math.max(0.01, len*H-doorArea);
+  const essai=function(stcPorte){
+    const parts=[{a:mur, stc:target}];
+    for(const d of portes) parts.push({a:Math.max(0.1,d.w)*HD, stc:stcPorte});
+    return composite(parts);
+  };
+  const pire=portes.reduce(function(m,d){ return (d.stc!=null && d.stc<m) ? d.stc : m; }, 99);
+  for(const v of STC_PORTES){
+    if(v<=pire) continue;
+    const c=essai(v);
+    if(c>=target-0.5)
+      return 'Une porte STC '+v+' amène le composite à <b style="color:var(--ok)">'+
+             fr(c,1)+'</b> : la cible '+target+' est atteinte.';
+  }
+  const c=essai(STC_PORTES[STC_PORTES.length-1]);
+  return 'Même une porte STC '+STC_PORTES[STC_PORTES.length-1]+' plafonne le composite à <b>'+
+         fr(c,1)+'</b> : atteindre '+target+' demande aussi de reprendre le mur ou sa surface vitrée.';
+}
+function calcDepuisPaire(){
+  const p=(selSeg&&selSeg.pair)?selSeg.pair:selPair;
+  if(!p){
+    const pr=selPorte&&!selPorte.man?(D.portes[selPorte.det]||{}).pair:null;
+    if(pr) selPair=P.find(function(q){ return pairKey(q)===pr; });
+  }
+  setView('calc'); calcLoadPair();
+}
+// ================== undo / redo global ==================
+let undoStack=[], redoStack=[], _snap=null;
+function snapState(){ return JSON.stringify(etatValidation()); }
+function majUndoUI(){
+  const u=document.getElementById('btn_undo'), r=document.getElementById('btn_redo');
+  if(u) u.disabled=!undoStack.length;
+  if(r) r.disabled=!redoStack.length;
+}
+function pushUndo(){ undoStack.push(snapState()); if(undoStack.length>80) undoStack.shift();
+  redoStack.length=0; _snap=null; majUndoUI(); }
+// valide un snapshot souris pris en phase de capture, si l'état a changé
+function commitSnap(){
+  if(_snap==null) return;
+  const now=snapState();
+  if(now!==_snap){ undoStack.push(_snap); if(undoStack.length>80) undoStack.shift();
+    redoStack.length=0; majUndoUI(); }
+  _snap=null;
+}
+function undo(){ if(!undoStack.length) return;
+  redoStack.push(snapState()); applyState(JSON.parse(undoStack.pop())); majUndoUI(); }
+function redo(){ if(!redoStack.length) return;
+  undoStack.push(snapState()); applyState(JSON.parse(redoStack.pop())); majUndoUI(); }
+
+// ================== auto-connexion (redressement + soudure des cloisons) ==================
+function tousSegments(){
+  const segs=[];
+  for(const p of P) for(const s of p.segments) segs.push(s);
+  for(const m of state.manual) segs.push(m);
+  return segs;
+}
+// regroupe des coordonnées proches (largeur de grappe <= tol) et cale chaque
+// membre sur la moyenne pondérée par la longueur -> rails d'alignement partagés
+function snapRail(items, tol){
+  const idx=items.map((_,i)=>i).sort((a,b)=>items[a].v-items[b].v);
+  let i=0;
+  while(i<idx.length){
+    let j=i, sw=0, swv=0; const min=items[idx[i]].v;
+    while(j<idx.length && items[idx[j]].v-min<=tol){
+      const it=items[idx[j]]; sw+=it.w; swv+=it.v*it.w; j++;
+    }
+    const rep=Math.round((sw>0?swv/sw:min)*10)/10;
+    for(let k=i;k<j;k++) items[idx[k]].set(rep);
+    i=j;
+  }
+}
+// fusionne les segments colinéaires (même axe + même coordonnée) d'une même liste,
+// en comblant les petits interstices ; `memeStc` impose de ne fusionner qu'à STC égal
+function fusionColineaire(list, memeStc){
+  const EPS=0.6, GAP=0.1*PT_PER_M, out=[], used=new Array(list.length).fill(false);
+  for(let i=0;i<list.length;i++){
+    if(used[i]) continue;
+    const s=list[i];
+    const horiz=Math.abs(s.p2[1]-s.p1[1])<=EPS, vert=Math.abs(s.p2[0]-s.p1[0])<=EPS;
+    used[i]=true;
+    if(!horiz && !vert){ out.push(s); continue; }   // diagonale : intacte
+    const axis=horiz?0:1, coord=horiz?(s.p1[1]+s.p2[1])/2:(s.p1[0]+s.p2[0])/2;
+    const grp=[s];
+    for(let j=i+1;j<list.length;j++){
+      if(used[j]) continue;
+      const t=list[j];
+      if(memeStc && t.stc!==s.stc) continue;
+      const th=Math.abs(t.p2[1]-t.p1[1])<=EPS, tv=Math.abs(t.p2[0]-t.p1[0])<=EPS;
+      const tc=horiz?(t.p1[1]+t.p2[1])/2:(t.p1[0]+t.p2[0])/2;
+      if(((horiz&&th)||(vert&&tv)) && Math.abs(tc-coord)<=EPS){ grp.push(t); used[j]=true; }
+    }
+    const ivs=grp.map(g=>[Math.min(g.p1[axis],g.p2[axis]),Math.max(g.p1[axis],g.p2[axis])])
+                 .sort((a,b)=>a[0]-b[0]);
+    let lo=ivs[0][0], hi=ivs[0][1];
+    const flush=()=>{
+      const s2=Object.assign({},s);
+      if(horiz){ s2.p1=[Math.round(lo*10)/10,Math.round(coord*10)/10];
+                 s2.p2=[Math.round(hi*10)/10,Math.round(coord*10)/10]; }
+      else { s2.p1=[Math.round(coord*10)/10,Math.round(lo*10)/10];
+             s2.p2=[Math.round(coord*10)/10,Math.round(hi*10)/10]; }
+      segMeta(s2); out.push(s2);
+    };
+    for(let k=1;k<ivs.length;k++){
+      if(ivs[k][0]-hi<=GAP) hi=Math.max(hi,ivs[k][1]);
+      else { flush(); lo=ivs[k][0]; hi=ivs[k][1]; }
+    }
+    flush();
+  }
+  return out;
+}
+function autoConnect(){
+  if(!state) return;
+  const segs=tousSegments();
+  if(!segs.length) return;
+  pushUndo();
+  const tolCm=+document.getElementById('ac_tol').value||15;
+  const TOL=tolCm/100*PT_PER_M;
+  // 1) tout est supposé horizontal/vertical : on force chaque trait sur son axe
+  //    dominant -> parfaitement droit et perpendiculaire
+  for(const s of segs){
+    const dx=s.p2[0]-s.p1[0], dy=s.p2[1]-s.p1[1];
+    if(Math.abs(dx)<1e-6 && Math.abs(dy)<1e-6) continue;
+    if(Math.abs(dx)>=Math.abs(dy)){ const y=(s.p1[1]+s.p2[1])/2; s.p1[1]=y; s.p2[1]=y; }
+    else { const x=(s.p1[0]+s.p2[0])/2; s.p1[0]=x; s.p2[0]=x; }
+  }
+  // 2) rails partagés : alignement + soudure des extrémités proches
+  const itemsX=[], itemsY=[];
+  for(const s of segs){
+    const w=Math.max(0.1,Math.hypot(s.p2[0]-s.p1[0],s.p2[1]-s.p1[1]));
+    for(const key of ['p1','p2']){
+      const pt=s[key];
+      itemsX.push({v:pt[0],w,set:v=>{pt[0]=v;}});
+      itemsY.push({v:pt[1],w,set:v=>{pt[1]=v;}});
+    }
+  }
+  snapRail(itemsX,TOL); snapRail(itemsY,TOL);
+  for(const s of segs) segMeta(s);
+  // 3) fusion des colinéaires + purge des traits écrasés
+  for(const p of P){
+    p.segments=fusionColineaire(p.segments,false).filter(s=>s.len_m>=0.1);
+    p.len_m=Math.round(p.segments.reduce((a,s)=>a+s.len_m,0)*10)/10;
+  }
+  state.manual=fusionColineaire(state.manual,true).filter(s=>s.len_m>=0.1);
+  selSeg=selPair=null;
+  render(); panel();
+}
+
+// ================== calibrage de l'échelle (2 clics) ==================
+let calibA=null;
+function appliquerEchelle(ptPerM){
+  pushUndo();
+  PT_PER_M=ptPerM; D.echelle=Math.round(2834.6457/PT_PER_M*10)/10;
+  for(const p of P){ p.segments.forEach(segMeta);
+    p.len_m=Math.round(p.segments.reduce((a,s)=>a+s.len_m,0)*10)/10; }
+  state.manual.forEach(segMeta);
+  for(const [c,pts] of Object.entries(state.polys)){
+    const a=polyArea(pts);
+    if(state.newRooms[c]) state.newRooms[c].area_det=a;
+    else if(D.rooms[c]) D.rooms[c].area_det=a;
+  }
+  document.getElementById('srvinfo').textContent=
+    (D.vision_note||'')+' · finesse '+(D.finesse??'?')+' · 1/'+(D.echelle??100);
+  render(); panel();
+}
+
+// ================== conformité : STC composite estimé ==================
+// combinaison énergétique de plusieurs éléments : STC = -10 log10( Σ(a·10^-STC/10)/Σa )
+function composite(parts){
+  let A=0, T=0;
+  for(const p of parts){ A+=p.a; T+=p.a*Math.pow(10,-p.stc/10); }
+  if(A<=0) return null;
+  return Math.round(-10*Math.log10(T/A)*10)/10;
+}
+function portesDeLaPaire(p){
+  const k=pairKey(p), out=[];
+  (D.portes||[]).forEach((pt,i)=>{
+    if(pt.pair===k) out.push({w:pt.r_m||0.9, stc:state.portesEtat[i]??null});
+  });
+  return out;
+}
+function compositePaire(p){
+  const target=stcOf(p);
+  const len=p.segments.reduce((a,s)=>a+s.len_m,0);
+  const portes=portesDeLaPaire(p);
+  const H=+(document.getElementById('hsp')||{}).value||2.7, HD=Math.min(H,2.1);
+  if(!portes.length || len<=0) return {target, comp:null, portes:0, unspec:0};
+  const wallArea=len*H; let doorArea=0, parts=[], unspec=0;
+  for(const d of portes){ const a=Math.max(0.1,d.w)*HD; doorArea+=a;
+    if(d.stc==null) unspec++; else parts.push({a, stc:d.stc}); }
+  parts.push({a:Math.max(0.01, wallArea-doorArea), stc:target});
+  return {target, comp:unspec?null:composite(parts), portes:portes.length, unspec};
+}
+function noteComposite(p){
+  const cp=compositePaire(p);
+  if(!cp.portes) return '';
+  if(cp.unspec) return '<div style="color:#e67e22;margin:3px 0">❔ STC composite : porte non renseignée</div>';
+  const bad=cp.comp<cp.target-0.5;
+  return `<div style="color:${bad?'#c0392b':'#2e7d32'};margin:3px 0">`+
+    `${bad?'⚠':'✔'} STC composite estimé ≈ <b>${cp.comp}</b> (cible ${cp.target})</div>`;
+}
+// ================== Calculateur STC composite (STCc) + abaque ==================
+// Abaque : Architectural Acoustics, M. David Egan, p.191.
+// Correction (dB à soustraire du TL du mur) : C = 10·log10[(1−f) + f·10^(ΔTL/10)], f = %/100.
+// Vérifié sur l'exemple du livre : p=12,5 % , ΔTL=30 → C=21,0 dB.
+const CURVE_STD=[100,50,20,10,5,2,1,0.5,0.2,0.1];
+function calcInit(){
+  calcState={ unit:'m2', curve:12.5, probe:null, pair:null, rows:[
+    {name:'Mur',   stc:50, area:9},
+    {name:'Porte', stc:30, area:1.9},
+  ]};
+}
+function abaqueC(dTL,p){ const f=p/100; return 10*Math.log10((1-f)+f*Math.pow(10,dTL/10)); }
+function calcCompute(){
+  const rows=(calcState.rows||[]).filter(r=>(+r.area)>0);
+  const tot=rows.reduce((a,r)=>a+(+r.area||0),0);
+  if(!rows.length||tot<=0) return null;
+  const parts=rows.map(r=>({a:+r.area||0, stc:+r.stc||0}));
+  const stcc=composite(parts);              // réutilise la combinaison énergétique existante
+  const strong=rows.reduce((m,r)=>((+r.stc)>(+m.stc)?r:m));
+  const weak  =rows.reduce((m,r)=>((+r.stc)<(+m.stc)?r:m));
+  const pWeak=(+weak.area/tot)*100;
+  const dTL=(+strong.stc)-(+weak.stc);
+  return {stcc, strong, weak, pWeak, dTL, tot, correction:Math.round(((+strong.stc)-stcc)*10)/10};
+}
+function calcSet(i,k,v){ const r=calcState.rows[i]; if(!r) return;
+  r[k]=(k==='name')?v:(v===''?'':+v); calcRefresh(); }
+function calcDel(i){ calcState.rows.splice(i,1); majCalc(); }
+function calcAdd(){ calcState.rows.push({name:'Élément',stc:35,area:1}); majCalc(); }
+function calcSetUnit(u){ calcState.unit=u; majCalc(); }
+function calcSetCurve(v){ const p=+v; if(isFinite(p)&&p>0){ calcState.curve=p; calcRefresh(); } }
+// virgule decimale, et pas de « ,0 » inutile sur les valeurs entieres
+function pct(v){ return String(Math.round(v*100)/100).replace('.',','); }
+function calcLoadPair(){
+  const lib=document.getElementById('calc_pair');
+  if(!selPair){
+    if(lib) lib.innerHTML='<span style="color:var(--warn)">'+
+      'Sélectionnez d\'abord une cloison sur le plan.</span>';
+    return;
+  }
+  const p=selPair, target=stcOf(p);
+  const H=+(document.getElementById('hsp')||{}).value||2.7, HD=Math.min(H,2.1);
+  const len=p.segments.reduce((a,s)=>a+s.len_m,0);
+  const portes=portesDeLaPaire(p);
+  const rows=[]; let doorArea=0;
+  portes.forEach((d,i)=>{ const a=Math.max(0.1,d.w)*HD; doorArea+=a;
+    rows.push({name:'Porte '+(i+1), stc:(d.stc==null?target-10:d.stc), area:Math.round(a*100)/100}); });
+  rows.unshift({name:'Mur', stc:target, area:Math.round(Math.max(0.01,len*H-doorArea)*100)/100});
+  calcState.rows=rows; calcState.unit='m2'; calcState.probe=null;
+  calcState.pair={a:p.a, b:p.b, len:len, h:H, target:target};
+  const r0=calcCompute(); if(r0) calcState.curve=Math.round(r0.pWeak*10)/10;
+  majCalc();
+}
+// presets : les trois maillons faibles qu'on ajoute le plus souvent
+function calcAddPreset(nom, stc, surf){
+  calcState.rows.push({name:nom, stc:stc, area:surf});
+  majCalc();
+}
+function calcRenderTable(){
+  const u=calcState.unit==='m2'?'m²':'%';
+  const r=calcCompute();
+  const tot=calcState.rows.reduce((a,x)=>a+(+x.area||0),0);
+  // part de l'energie transmise : c'est elle qui explique le resultat
+  const parts=calcState.rows.map(x=>(+x.area||0)*Math.pow(10,-(+x.stc||0)/10));
+  const somme=parts.reduce((a,x)=>a+x,0);
+  let h='<tr><th style="width:16px"></th><th>Élément</th>'+
+    '<th style="text-align:right">Surface ('+u+')</th>'+
+    '<th style="text-align:right">STC</th>'+
+    '<th>Part de l\'énergie</th><th style="width:16px"></th></tr>';
+  calcState.rows.forEach(function(row,i){
+    const faible = r && r.weak===row && calcState.rows.length>1;
+    const part = somme>0 ? parts[i]/somme*100 : 0;
+    const col = faible ? '#f0a500' : colorOf(Math.min(60,Math.max(25,+row.stc||25)));
+    h+='<tr class="'+(faible?'weak':'')+'">'+
+      '<td><span class="dot" style="background:'+col+'"></span></td>'+
+      '<td><input class="t" value="'+String(row.name||'').replace(/"/g,'&quot;')+
+        '" oninput="calcSet('+i+',\'name\',this.value)"></td>'+
+      '<td style="text-align:right"><input class="num n" type="number" step="0.01" value="'+row.area+
+        '" oninput="calcSet('+i+',\'area\',this.value)"></td>'+
+      '<td style="text-align:right"><input class="num s" type="number" value="'+row.stc+
+        '" oninput="calcSet('+i+',\'stc\',this.value)"></td>'+
+      '<td><div class="share'+(faible?' w':'')+'"><div class="bar"><span style="width:'+
+        part.toFixed(1)+'%;background:'+col+'"></span></div><em>'+fr(part,1)+' %</em></div></td>'+
+      '<td><button class="tbtn ic" title="Retirer cet élément" onclick="calcDel('+i+')">'+
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"'+
+        ' stroke-width="1.9" stroke-linecap="round" class="ico"><use href="#i-close"/></svg>'+
+        '</button></td></tr>';
+  });
+  document.getElementById('calc_tab').innerHTML=h;
+  const t=document.getElementById('calc_tot');
+  if(t) t.textContent=calcState.rows.length+' élément'+(calcState.rows.length>1?'s':'')+
+    ' · Σ '+fr(tot)+' '+u;
+  for(const k of ['m2','pct'])
+    document.getElementById('cu_'+(k==='m2'?'m2':'pct')).classList.toggle('on', calcState.unit===k);
+  const lib=document.getElementById('calc_pair');
+  if(lib && calcState.pair)
+    lib.textContent=calcState.pair.a+' ↔ '+calcState.pair.b+' · '+
+      fr(calcState.pair.len)+' m × '+fr(calcState.pair.h)+' m';
+}
+function calcRulesText(r){
+  if(!r) return '';
+  const ecart=(+r.strong.stc)-(+r.weak.stc);
+  if(r.pWeak>50)
+    return `ℹ️ Élément faible &gt; 50 % de la surface : le STCc tend vers le STC de l'élément faible (${r.weak.stc}).`;
+  if(r.pWeak>=25)
+    return ecart>2 ? `⚠️ Élément faible 25–50 % : son STC ne devrait pas être &gt; 2 dB sous le mur (écart actuel ${ecart} dB).`
+                   : `✔ Règle 25–50 % respectée (écart ${ecart} ≤ 2 dB).`;
+  return ecart>5 ? `⚠️ Élément faible &lt; 25 % : son STC ne devrait pas être &gt; 5 dB sous le mur (écart actuel ${ecart} dB).`
+                 : `✔ Règle &lt; 25 % respectée (écart ${ecart} ≤ 5 dB).`;
+}
+// Geometrie partagee entre le trace et la lecture a la souris.
+const ABQ={W:600,H:400,ML:64,MR:56,MT:20,MB:58,lo:1,hi:60};
+function calcChartSVG(){
+  const W=ABQ.W,H=ABQ.H,ML=ABQ.ML,MR=ABQ.MR,MT=ABQ.MT,MB=ABQ.MB;
+  const PW=W-ML-MR,PH=H-MT-MB,lo=ABQ.lo,hi=ABQ.hi,L=Math.log10;
+  const xf=v=>ML+(L(v)-L(lo))/(L(hi)-L(lo))*PW;
+  const yf=v=>MT+(L(hi)-L(v))/(L(hi)-L(lo))*PH;
+  const ticks=[1,2,3,4,5,6,7,8,9,10,20,30,40,50,60];
+  const lbl={1:1,2:1,3:1,5:1,10:1,20:1,30:1,40:1,60:1};
+  let s='<svg id="abq" viewBox="0 0 '+W+' '+H+'" style="touch-action:none;cursor:crosshair">'+
+    '<rect x="'+ML+'" y="'+MT+'" width="'+PW+'" height="'+PH+'" fill="#1b2440"'+
+    ' stroke="rgba(255,255,255,.10)"/>';
+  for(const t of ticks){ const x=xf(t),y=yf(t);
+    s+='<line x1="'+x+'" y1="'+MT+'" x2="'+x+'" y2="'+(MT+PH)+'" stroke="rgba(255,255,255,.07)"/>';
+    s+='<line x1="'+ML+'" y1="'+y+'" x2="'+(ML+PW)+'" y2="'+y+'" stroke="rgba(255,255,255,.07)"/>';
+    if(lbl[t]){
+      s+='<text x="'+x+'" y="'+(MT+PH+16)+'" font-size="10.5" fill="#9aa7bd"'+
+         ' text-anchor="middle">'+t+'</text>';
+      s+='<text x="'+(ML-8)+'" y="'+(y+4)+'" font-size="10.5" fill="#9aa7bd"'+
+         ' text-anchor="end">'+t+'</text>'; }
+  }
+  const cur=calcState.curve;
+  const curvePts=p=>{ let pts=[];
+    for(let d=lo; d<=hi+1e-6; d*=Math.pow(10,0.008)){ const c=abaqueC(d,p);
+      if(c>=1&&c<=60) pts.push(xf(d).toFixed(1)+','+yf(c).toFixed(1)); }
+    return pts; };
+  // les courbes convergent vers le coin haut droit : on trace d'abord, puis on
+  // ecarte les etiquettes verticalement pour qu'aucune n'en recouvre une autre.
+  const etiquettes=[];
+  const drawCurve=(p,hl)=>{ const pts=curvePts(p); if(pts.length<2) return '';
+    const last=pts[pts.length-1].split(',');
+    etiquettes.push({p:p, hl:hl, x:+last[0], y:+last[1]});
+    return '<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+
+      (hl?'#3b82f6':'#3d4a6b')+'" stroke-width="'+(hl?2.6:1.4)+'"/>'; };
+  for(const p of CURVE_STD) if(Math.abs(p-cur)>1e-9) s+=drawCurve(p,false);
+  s+=drawCurve(cur,true);
+  etiquettes.sort((a,b)=>a.y-b.y);
+  let plancher=MT+4;
+  for(const e of etiquettes){
+    e.ty=Math.max(e.y, plancher);
+    plancher=e.ty+13;
+  }
+  for(const e of etiquettes){
+    const col=e.hl?'#3b82f6':'#5a7bb5';
+    if(Math.abs(e.ty-e.y)>2)
+      s+='<line x1="'+(e.x+2)+'" y1="'+e.y+'" x2="'+(ML+PW+8)+'" y2="'+(e.ty-3)+
+         '" stroke="'+col+'" stroke-width="0.8" opacity=".45"/>';
+    s+='<text x="'+(ML+PW+12)+'" y="'+e.ty+'" font-size="10.5" font-weight="600"'+
+       ' fill="'+col+'">'+pct(e.p)+' %</text>';
+  }
+  const r=calcCompute();
+  let dTL=(calcState.probe!=null)?calcState.probe:(r?Math.min(60,Math.max(1,r.dTL)):30);
+  const c=abaqueC(dTL,cur);
+  if(c>=1&&c<=60){ const px=xf(dTL),py=yf(c);
+    s+='<g stroke="#f0a500" stroke-width="1.2" stroke-dasharray="4 4">'+
+       '<path d="M'+px.toFixed(1)+' '+py.toFixed(1)+' H'+ML+'"/>'+
+       '<path d="M'+px.toFixed(1)+' '+py.toFixed(1)+' V'+(MT+PH)+'"/></g>';
+    s+='<circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="6" fill="#f0a500"'+
+       ' stroke="#141b33" stroke-width="2"/>';
+    s+='<text x="'+(px+12).toFixed(1)+'" y="'+(py-8).toFixed(1)+'" font-size="10.5"'+
+       ' font-weight="700" fill="#f0a500">'+fr(c,1)+' dB</text>'; }
+  s+='<g stroke="#7f8bab" stroke-width="1.2" fill="none"><path d="M'+ML+' '+(MT+PH)+
+     ' H'+(ML+PW)+'"/><path d="M'+ML+' '+MT+' V'+(MT+PH)+'"/></g>';
+  s+='<text x="'+(ML+PW/2)+'" y="'+(H-14)+'" font-size="11.5" fill="#dfe6f2"'+
+     ' text-anchor="middle">Écart de TL entre l\'élément fort et l\'élément faible (dB)</text>';
+  s+='<text x="16" y="'+(MT+PH/2)+'" font-size="11.5" fill="#dfe6f2" text-anchor="middle"'+
+     ' transform="rotate(-90 16 '+(MT+PH/2)+')">Perte sur le TL de l\'élément fort (dB)</text>';
+  s+='</svg>';
+  return s;
+}
+function calcAbqProbe(clientX){
+  const svgn=document.getElementById('abq'); if(!svgn) return;
+  const rect=svgn.getBoundingClientRect();
+  const PW=ABQ.W-ABQ.ML-ABQ.MR, L=Math.log10;
+  const localX=(clientX-rect.left)/rect.width*ABQ.W;
+  let t=L(ABQ.lo)+(localX-ABQ.ML)/PW*(L(ABQ.hi)-L(ABQ.lo));
+  let v=Math.pow(10,t); v=Math.min(ABQ.hi,Math.max(ABQ.lo,v));
+  calcState.probe=Math.round(v*10)/10; calcRefresh();
+}
+function calcAttachDrag(){
+  const svgn=document.getElementById('abq'); if(!svgn) return;
+  let down=false;
+  svgn.addEventListener('pointerdown',e=>{ down=true; svgn.setPointerCapture(e.pointerId);
+    calcAbqProbe(e.clientX); e.preventDefault(); });
+  svgn.addEventListener('pointermove',e=>{ if(down) calcAbqProbe(e.clientX); });
+  svgn.addEventListener('pointerup',()=>{ down=false; });
+}
+function calcRefresh(){
+  // le selecteur de courbe est reconstruit seul : le tableau garde son focus de saisie
+  const cur=calcState.curve;
+  const sel=document.getElementById('calc_curve');
+  if(sel){ const opts=CURVE_STD.slice(); if(!opts.includes(cur)) opts.push(cur);
+    opts.sort((a,b)=>b-a);
+    sel.innerHTML=opts.map(p=>'<option value="'+p+'" '+
+      (Math.abs(p-cur)<1e-9?'selected':'')+'>'+pct(p)+' %</option>').join(''); }
+  const free=document.getElementById('calc_curvefree');
+  if(free && document.activeElement!==free) free.value=CURVE_STD.includes(cur)?'':cur;
+
+  const r=calcCompute();
+  const res=document.getElementById('calc_res');
+  if(!r){
+    res.innerHTML='<div class="muted">Renseignez au moins un élément avec une surface &gt; 0.</div>';
+  } else {
+    const cible=calcState.pair?calcState.pair.target:null;
+    const ecart=(cible!=null)?Math.round((r.stcc-cible)*10)/10:null;
+    let h='<div style="display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap">'+
+      '<div><div class="colh">STC composite</div>'+
+      '<div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">'+
+      '<span class="bigres">'+fr(r.stcc,1)+'</span><span class="muted">dB</span></div></div>';
+    if(cible!=null)
+      h+='<div style="height:44px;width:1px;background:rgba(255,255,255,.13)"></div>'+
+        '<div><div class="colh">Cible du plan</div>'+
+        '<div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">'+
+        '<span class="num" style="color:var(--texte);font-size:19px;font-weight:600">'+cible+
+        '</span><span class="muted">'+ech(calcState.pair.a)+' ↔ '+ech(calcState.pair.b)+
+        '</span></div></div>';
+    h+='<div style="flex:1"></div>';
+    if(ecart!=null)
+      h+='<span class="verdict '+(ecart<-0.5?'bad':'ok')+'">'+
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"'+
+        ' stroke-width="2" stroke-linecap="round" class="ico"><use href="'+
+        (ecart<-0.5?'#i-info':'#i-check')+'"/></svg>'+
+        (ecart<-0.5 ? fr(-ecart,1)+' dB sous la cible' : 'cible atteinte')+'</span>';
+    h+='</div>'+conseilCalc(r);
+    res.innerHTML=h;
+  }
+  document.getElementById('calc_rules').innerHTML=calcRulesText(r);
+  document.getElementById('calc_chart').innerHTML=calcChartSVG();
+  calcAttachDrag();
+
+  const read=document.getElementById('calc_read');
+  const dTL=(calcState.probe!=null)?calcState.probe:(r?Math.min(60,Math.max(1,r.dTL)):30);
+  const cc=Math.round(abaqueC(dTL,cur)*10)/10;
+  const wallStc=r?(+r.strong.stc):50;
+  read.innerHTML='<span style="display:flex;align-items:center;gap:6px">'+
+    '<span class="dot" style="border-radius:4px;background:#f0a500"></span>'+
+    '<span class="num" style="color:var(--titre)">Écart '+fr(dTL,1)+' dB · '+pct(cur)+
+    ' % de surface → <b>−'+fr(cc,1)+' dB</b> · composite '+fr(wallStc-cc,1)+'</span></span>';
+}
+// « le maillon faible, et ce que coûterait sa correction »
+function conseilCalc(r){
+  if(!r || calcState.rows.length<2) return '';
+  const tot=calcState.rows.reduce((a,x)=>a+(+x.area||0),0);
+  const pSurf=(+r.weak.area)/tot*100;
+  const pEner=(+r.weak.area)*Math.pow(10,-(+r.weak.stc)/10) /
+    calcState.rows.reduce((a,x)=>a+(+x.area||0)*Math.pow(10,-(+x.stc||0)/10),0)*100;
+  const essai=function(v){
+    return composite(calcState.rows.map(function(x){
+      return {a:+x.area||0, stc:(x===r.weak? v : +x.stc||0)}; }));
+  };
+  const cible=calcState.pair?calcState.pair.target:null;
+  let suite='';
+  const mieux=STC_PORTES.filter(v=>v>(+r.weak.stc));
+  if(mieux.length){
+    // le premier palier qui tient la cible ; a defaut, le plafond du maillon
+    let atteint=null;
+    if(cible!=null) for(const v of mieux){ if(essai(v)>=cible-0.5){ atteint=v; break; } }
+    if(atteint!=null){
+      suite=' Passer <b>'+ech(r.weak.name)+'</b> à STC '+atteint+
+        ' amène le composite à <b style="color:var(--ok)">'+fr(essai(atteint),1)+
+        '</b> : la cible '+cible+' est atteinte.';
+    } else {
+      const haut=mieux[mieux.length-1], c=essai(haut);
+      suite=' Passer <b>'+ech(r.weak.name)+'</b> à STC '+mieux[0]+
+        ' remonte le composite à <b style="color:var(--ok)">'+fr(essai(mieux[0]),1)+'</b>.';
+      if(cible!=null) suite+=' Même à STC '+haut+' il plafonne à <b>'+fr(c,1)+
+        '</b> : atteindre '+cible+' demande de reprendre un autre élément.';
+    }
+  }
+  return '<div class="advice">'+
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f0a500"'+
+    ' stroke-width="1.8" stroke-linecap="round" class="ico" style="margin-top:2px">'+
+    '<use href="#i-bulb"/></svg><span style="flex:1;color:var(--texte)">'+
+    '<b style="color:var(--warn)">Maillon faible : '+ech(r.weak.name)+'</b> — <b>'+
+    fr(pEner,1)+' %</b> de l\'énergie transmise sur <b>'+fr(pSurf,1)+
+    ' %</b> de la surface.'+suite+'</span></div>';
+}
+function majCalc(){
+  if(!calcState) calcInit();
+  calcRenderTable();
+  calcRefresh();
+}
+function centrerSur(cx,cy){
+  const vb=svg.viewBox.baseVal;
+  planDiv.scrollLeft=(cx-vb.x)/vb.width*svg.clientWidth-planDiv.clientWidth/2;
+  planDiv.scrollTop=(cy-vb.y)/vb.height*svg.clientHeight-planDiv.clientHeight/2;
+}
+
+// ================== métrés : quantités par STC + liste triable ==================
+let listSort={col:'stc', dir:1};
+const STCOPTS=[30,35,40,45,50,55,60];
+function matrixStc(p){ const key=[state.cats[p.ca],state.cats[p.cb]].sort().join('|');
+  return state.matrix[key] ?? 45; }
+function quantitesParSTC(){
+  const map={};
+  for(const p of P){ if(state.excluded[pairKey(p)]) continue;
+    const v=stcOf(p), len=p.segments.reduce((a,s)=>a+s.len_m,0);
+    (map[v]=map[v]||{ml:0,n:0}); map[v].ml+=len; map[v].n++; }
+  for(const m of state.manual){ (map[m.stc]=map[m.stc]||{ml:0,n:0});
+    map[m.stc].ml+=m.len_m; map[m.stc].n++; }
+  return map;
+}
+function cloisonRows(){
+  const rows=[];
+  for(const p of P){ const k=pairKey(p);
+    const len=Math.round(p.segments.reduce((a,s)=>a+s.len_m,0)*10)/10;
+    if(len<=0) continue;
+    const cp=compositePaire(p);
+    rows.push({p, a:p.a+' ↔ '+p.b, cats:state.cats[p.ca]+' / '+state.cats[p.cb],
+      stc:stcOf(p), len, portes:p.portes||0,
+      comp: cp.portes ? (cp.unspec ? NaN : cp.comp) : null,
+      statut: state.excluded[k]?'ignorée':(state.overrides[k]!=null?'forcée':'auto')});
+  }
+  for(const m of state.manual) rows.push({m, a:'cloison manuelle', cats:'—',
+    stc:m.stc, len:m.len_m, portes:0, comp:null, statut:'manuelle'});
+  return rows;
+}
+function majMetres(){
+  if(!state || document.getElementById('tabqty').style.display==='none') return;
+  const q=quantitesParSTC(), qt=document.getElementById('qtytab');
+  const ks=Object.keys(q).map(Number).sort((a,b)=>a-b);
+  let totMl=0, totN=0, h='<tr><th>Cible</th><th>ml</th><th>Nb cloisons</th></tr>';
+  for(const v of ks){ totMl+=q[v].ml; totN+=q[v].n;
+    h+=`<tr><td><span class="chip" style="background:${colorOf(v)}">STC ${v}</span></td>`+
+       `<td>${Math.round(q[v].ml*10)/10}</td><td>${q[v].n}</td></tr>`; }
+  h+=`<tr><th>Total</th><th>${Math.round(totMl*10)/10}</th><th>${totN}</th></tr>`;
+  qt.innerHTML=h;
+  const rows=cloisonRows();
+  const cols=[['a','Cloison'],['cats','Catégories'],['stc','STC'],['len','ml'],
+              ['portes','Portes'],['comp','Compos.'],['statut','Statut']];
+  const dir=listSort.dir, col=listSort.col;
+  rows.sort((r1,r2)=>{
+    let x=r1[col], y=r2[col];
+    if(col==='comp'){ x=(x==null?-1:(Number.isNaN(x)?0:x)); y=(y==null?-1:(Number.isNaN(y)?0:y)); }
+    if(typeof x==='string') return dir*x.localeCompare(y);
+    return dir*((x||0)-(y||0));
+  });
+  let hh='<tr>'+cols.map(([c,lab])=>
+    `<th class="sorth" data-c="${c}" style="cursor:pointer">${lab}${col===c?(dir>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>';
+  for(let i=0;i<rows.length;i++){ const r=rows[i];
+    const compTxt=r.comp==null?'':(Number.isNaN(r.comp)?'porte ?':r.comp);
+    const bad=typeof r.comp==='number' && !Number.isNaN(r.comp) && r.comp<r.stc-0.5;
+    const stcStyle=`background:${colorOf(r.stc)};color:#fff;border:0;border-radius:9px;`+
+      `font-size:11px;padding:1px 3px;cursor:pointer`;
+    let stcCell;
+    if(r.p){ const ov=state.overrides[pairKey(r.p)], mv=matrixStc(r.p);
+      stcCell=`<select class="stcsel" data-i="${i}" style="${stcStyle}">`+
+        `<option value="" ${ov==null?'selected':''}>auto (${mv})</option>`+
+        STCOPTS.map(x=>`<option value="${x}" ${ov===x?'selected':''}>${x}</option>`).join('')+
+        `</select>`;
+    } else {
+      stcCell=`<select class="stcsel" data-i="${i}" style="${stcStyle}">`+
+        STCOPTS.map(x=>`<option value="${x}" ${r.m.stc===x?'selected':''}>${x}</option>`).join('')+
+        `</select>`;
+    }
+    hh+=`<tr class="lrow" data-i="${i}" style="cursor:pointer">`+
+      `<td style="text-align:left">${r.a}</td>`+
+      `<td style="text-align:left;font-size:10px">${r.cats}</td>`+
+      `<td>${stcCell}</td>`+
+      `<td>${r.len}</td><td>${r.portes||''}</td>`+
+      `<td style="color:${bad?'#c0392b':'inherit'};font-weight:${bad?'bold':'normal'}">${compTxt}</td>`+
+      `<td style="font-size:10px">${r.statut}</td></tr>`;
+  }
+  document.getElementById('listtab').innerHTML=hh;
+  document.querySelectorAll('#listtab .sorth').forEach(th=>th.onclick=()=>{
+    const c=th.dataset.c;
+    if(listSort.col===c) listSort.dir*=-1; else { listSort.col=c; listSort.dir=1; }
+    majMetres();
+  });
+  document.querySelectorAll('#listtab .lrow').forEach(tr=>tr.onclick=()=>{
+    const r=rows[+tr.dataset.i];
+    if(r.p){ selPair=r.p; selSeg=selRoom=selPorte=null; }
+    else { selSeg={s:r.m,manual:true}; selPair=selRoom=selPorte=null; }
+    render(); panel();
+    const s=r.p?r.p.segments[0]:r.m;
+    if(s) centrerSur(s.cx, s.cy);
+  });
+  document.querySelectorAll('#listtab .stcsel').forEach(sel=>{
+    sel.onmousedown=e=>e.stopPropagation();
+    sel.onclick=e=>e.stopPropagation();       // ne pas sélectionner/centrer la ligne
+    sel.onchange=e=>{
+      e.stopPropagation();
+      pushUndo();
+      const r=rows[+sel.dataset.i];
+      if(r.p){ const k=pairKey(r.p);
+        if(sel.value==='') delete state.overrides[k];
+        else { state.overrides[k]=+sel.value; lastSTC=+sel.value; } }
+      else { r.m.stc=+sel.value; lastSTC=+sel.value; }
+      render(); panel();
+    };
+  });
+}
+function expQtyCSV(){
+  const q=quantitesParSTC(); let rows=[['Cible STC','Longueur (m)','Nb cloisons']], totMl=0, totN=0;
+  for(const v of Object.keys(q).map(Number).sort((a,b)=>a-b)){
+    rows.push([v, Math.round(q[v].ml*10)/10, q[v].n]); totMl+=q[v].ml; totN+=q[v].n; }
+  rows.push(['Total', Math.round(totMl*10)/10, totN]);
+  dl('metre_cloisons_STC.csv','﻿'+rows.map(r=>r.join(';')).join('\r\n'),'text/csv');
+}
+function majConformite(){
+  const div=document.getElementById('conf'); if(!div||!state) return;
+  const items=[];
+  for(const p of P){ const k=pairKey(p); if(state.excluded[k]) continue;
+    const r=compositePaire(p); if(!r.portes) continue;
+    if(r.unspec) items.push({p, bad:false,
+      t:p.a+' ↔ '+p.b+' · porte non renseignée',
+      d:'cible '+r.target+' — affecter un STC de porte'});
+    else if(r.comp!=null && r.comp < r.target-0.5) items.push({p, bad:true,
+      t:p.a+' ↔ '+p.b+' · composite '+fr(r.comp,1),
+      d:'cible '+r.target+' — le maillon faible plafonne la cloison'});
+  }
+  const cnt=document.getElementById('confcnt');
+  const hd=document.getElementById('confhd');
+  const ico=hd.querySelector('use');
+  if(!items.length){
+    hd.style.background='rgba(46,125,82,.12)';
+    ico.setAttribute('href','#i-check');
+    ico.parentNode.setAttribute('stroke','#8fb98f');
+    cnt.innerHTML='<span style="background:#2e7d52;color:#fff;border-radius:9px;padding:1px 8px;'+
+      'font-size:11.5px;font-weight:700">0</span>';
+    div.innerHTML='<div class="muted" style="color:var(--ok)">'+
+      'Aucune non-conformité : toutes les portes renseignées tiennent leur cible.</div>';
+    return;
+  }
+  hd.style.background='rgba(240,165,0,.10)';
+  ico.setAttribute('href','#i-alert');
+  ico.parentNode.setAttribute('stroke','#f0a500');
+  cnt.innerHTML='<span style="background:#f0a500;color:#33270a;border-radius:9px;padding:1px 8px;'+
+    'font-size:11.5px;font-weight:700">'+items.length+'</span>';
+  const courant=(selSeg&&selSeg.pair)?selSeg.pair:selPair;
+  div.innerHTML=items.map(function(it,i){
+    const on=(it.p===courant);
+    return '<div class="conf-row'+(it.bad?' bad':'')+(on?' on':'')+'" data-i="'+i+'">'+
+      '<div style="flex:1;min-width:0"><div class="num" style="color:var(--texte)">'+
+      ech(it.t)+'</div><div class="muted" style="font-size:10.5px">'+ech(it.d)+'</div></div>'+
+      '<span class="conf-act">'+(on?'Sélection':'Voir')+'</span></div>';
+  }).join('');
+  div.querySelectorAll('.conf-row').forEach(function(row){ row.onclick=function(){
+    const it=items[+row.dataset.i];
+    selPair=it.p; selRoom=selSeg=selPorte=null; render(); panel();
+    const g=it.p.segments[0]; if(g) centrerSur(g.cx, g.cy);
+  }; });
+}
+// barre d'etat : ce que contient le releve, en permanence sous les yeux
+function majStats(){
+  const e=document.getElementById('sb_stats'); if(!e||!state) return;
+  const paires=P.filter(function(p){ return !state.excluded[pairKey(p)]; });
+  const n=paires.length+state.manual.length;
+  const ml=paires.reduce(function(a,p){ return a+p.segments.reduce(
+      function(b,s){ return b+s.len_m; },0); },0)
+    +state.manual.reduce(function(a,m){ return a+m.len_m; },0);
+  const np=(D.portes||[]).length+state.portes_man.length;
+  e.innerHTML='<span>Échelle 1/'+(D.echelle||100)+'</span><i>·</i>'+
+    '<span>'+n+' cloisons · '+fr(ml,1)+' m</span><i>·</i>'+
+    '<span>'+np+' porte'+(np>1?'s':'')+'</span>';
+  const q=document.getElementById('qtycnt');
+  if(q) q.textContent=fr(ml,1)+' m';
+}
+
+// ================== export DXF (cloisons -> calques STC) ==================
+function expDXF(){
+  const c=D.clip, x0=c[0], y1=c[3];
+  const MX=x=>Math.round((x-x0)/PT_PER_M*1000)/1000;
+  const MY=y=>Math.round((y1-y)/PT_PER_M*1000)/1000;   // Y inversé (repère CAO)
+  const o=[], w=(code,val)=>{ o.push(code); o.push(String(val)); };
+  const aci={25:3,30:3,35:4,40:5,45:30,50:1,55:6,60:6};   // couleurs approx par STC
+  const stcs=new Set();
+  for(const p of P) if(!state.excluded[pairKey(p)]) stcs.add(stcOf(p));
+  for(const m of state.manual) stcs.add(m.stc);
+  const lstc=[...stcs].sort((a,b)=>a-b);
+  w(0,'SECTION'); w(2,'HEADER'); w(9,'$ACADVER'); w(1,'AC1015'); w(0,'ENDSEC');
+  w(0,'SECTION'); w(2,'TABLES'); w(0,'TABLE'); w(2,'LAYER'); w(70,lstc.length+2);
+  const layer=(n,col)=>{ w(0,'LAYER'); w(2,n); w(70,0); w(62,col); w(6,'CONTINUOUS'); };
+  lstc.forEach(v=>layer('STC_'+v, aci[v]||7));
+  layer('PORTES',7); layer('ZONES',8);
+  w(0,'ENDTAB'); w(0,'ENDSEC');
+  w(0,'SECTION'); w(2,'ENTITIES');
+  const line=(p1,p2,lay)=>{ w(0,'LINE'); w(8,lay);
+    w(10,MX(p1[0])); w(20,MY(p1[1])); w(30,0);
+    w(11,MX(p2[0])); w(21,MY(p2[1])); w(31,0); };
+  for(const p of P){ const k=pairKey(p); if(state.excluded[k]) continue;
+    const lay='STC_'+stcOf(p); for(const s of p.segments) line(s.p1,s.p2,lay); }
+  for(const m of state.manual) line(m.p1,m.p2,'STC_'+m.stc);
+  if(portes_aff) for(const pm of state.portes_man) line([pm.x,pm.y],[pm.lx,pm.ly],'PORTES');
+  if(zonage) for(const pts of Object.values(state.polys)){
+    w(0,'LWPOLYLINE'); w(8,'ZONES'); w(90,pts.length); w(70,1);
+    for(const pt of pts){ w(10,MX(pt[0])); w(20,MY(pt[1])); } }
+  w(0,'ENDSEC'); w(0,'EOF');
+  dl((D.sheet||'plan').replace(/\.pdf$/i,'')+'_cibles_STC.dxf', o.join('\r\n')+'\r\n',
+     'application/dxf');
+}
+function legend(){
+  const utilises={};
+  if(state) for(const p of P) if(!state.excluded[pairKey(p)]) utilises[stcOf(p)]=1;
+  if(state) for(const m of state.manual) utilises[m.stc]=1;
+  document.getElementById('leg').innerHTML=
+    '<div class="muted" style="margin-bottom:8px">En gras : les cibles présentes sur ce niveau.</div>'+
+    '<div style="display:flex;gap:4px">'+Object.entries(COLORS).map(function(kv){
+      const on=utilises[kv[0]];
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">'+
+        '<span style="width:100%;height:6px;border-radius:3px;background:'+kv[1]+'"></span>'+
+        '<span style="font-size:10.5px;color:'+(on?'var(--titre)':'var(--aide)')+
+        ';font-weight:'+(on?600:400)+'">'+kv[0]+'</span></div>';
+    }).join('')+'</div>';
+  document.getElementById('legzone').innerHTML=
+    '<div style="margin-top:12px"><div class="muted" style="margin-bottom:6px">'+
+    'Zonage — une couleur par catégorie de local</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px">'+D.cats.map(function(c){
+      return '<span class="catbtn"><i style="background:'+catColor(c)+'"></i>'+ech(c)+'</span>';
+    }).join('')+'</div></div>';
+}
+function matrixTable(){
+  const cats=D.cats,t=document.getElementById('mat');
+  let h='<tr><th></th>'+cats.map(function(c){
+    return '<th title="'+ech(c)+'">'+ech(c.slice(0,6))+'</th>'; }).join('')+'</tr>';
+  for(let i=0;i<cats.length;i++){
+    h+='<tr><th title="'+ech(cats[i])+'" style="text-align:left">'+ech(cats[i].slice(0,10))+'</th>';
+    for(let j=0;j<cats.length;j++){
+      if(j<i){h+='<td></td>';continue;}
+      const key=[cats[i],cats[j]].sort().join('|');
+      h+='<td><input value="'+(state.matrix[key]==null?'':state.matrix[key])+
+         '" data-k="'+ech(key)+'"></td>';
+    } h+='</tr>';
+  }
+  t.innerHTML=h;
+  t.querySelectorAll('input').forEach(function(inp){ inp.onchange=function(e){
+    pushUndo();
+    state.matrix[e.target.dataset.k]=+e.target.value||0;
+    render(); panel(); majMatMod(); }; });
+  majMatMod();
+}
+// combien de cases ont ete touchees depuis l'analyse : visible sans deplier
+function majMatMod(){
+  const e=document.getElementById('matmod'); if(!e||!D||!state) return;
+  let n=0;
+  for(const k in state.matrix) if(state.matrix[k]!==D.matrix[k]) n++;
+  e.textContent = n ? n+' valeur'+(n>1?'s':'')+' modifiée'+(n>1?'s':'') : '';
+}
+function zoom(f){ majZoom(scale*f); }
+function majZoom(v){
+  scale=Math.min(12, Math.max(0.2, v));
+  document.getElementById('wrap').style.width=(scale*100)+'%';
+  const z=document.getElementById('zoomval');
+  if(z) z.textContent=Math.round(scale*100)+' %';
+}
+// a l'echelle 1 le plan occupe toute la largeur : ajuster revient a ramener
+// sa hauteur dans la fenetre, sans jamais depasser 100 %.
+function zoomFit(){
+  const img=document.getElementById('bg');
+  const pl=document.getElementById('plan');
+  if(!img.naturalWidth) return majZoom(1);
+  const hauteur1=pl.clientWidth*img.naturalHeight/img.naturalWidth;
+  majZoom(Math.min(1, pl.clientHeight/hauteur1));
+}
+const planDiv=document.getElementById('plan');
+planDiv.addEventListener('wheel',e=>{
+  if(!e.ctrlKey) return;
+  e.preventDefault();
+  const f=e.deltaY<0?1.15:1/1.15;
+  const rect=planDiv.getBoundingClientRect();
+  const cx=e.clientX-rect.left+planDiv.scrollLeft;
+  const cy=e.clientY-rect.top+planDiv.scrollTop;
+  zoom(f);
+  planDiv.scrollLeft=cx*f-(e.clientX-rect.left);
+  planDiv.scrollTop=cy*f-(e.clientY-rect.top);
+},{passive:false});
+// ================== enregistrement avec choix d'emplacement ==================
+// File System Access API (Chrome/Edge, y compris file://) : vraie boîte « Enregistrer sous »
+// + MÉMORISATION du dernier dossier — option id (persistante par navigateur) et startIn sur
+// le dernier handle (session). Repli sur téléchargement classique si l'API est absente (Firefox…).
+const SAVE_ID='stc_outil';
+let lastSaveHandle=null;
+function canPick(){ return typeof window.showSaveFilePicker==='function'; }
+function _saveLabel(mime){ return ({'text/csv':'CSV','application/json':'JSON','text/html':'Page HTML',
+  'image/jpeg':'Image JPEG','image/vnd.dxf':'DXF','application/x-dxf':'DXF',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation':'PowerPoint'})[mime]||'Fichier'; }
+async function pickHandle(nom, mime){
+  const opts={suggestedName:nom, id:SAVE_ID};
+  const m=/\.([a-z0-9]+)$/i.exec(nom||'');
+  if(m) opts.types=[{description:_saveLabel(mime),
+    accept:{[mime||'application/octet-stream']:['.'+m[1].toLowerCase()]}}];
+  if(lastSaveHandle) opts.startIn=lastSaveHandle;   // rouvre dans le dernier dossier choisi
+  const h=await window.showSaveFilePicker(opts); lastSaveHandle=h; return h;
+}
+async function writeHandle(h, data, mime){
+  const blob=data instanceof Blob?data:new Blob([data],{type:mime});
+  const w=await h.createWritable(); await w.write(blob); await w.close();
+}
+function download(nom, data, mime){
+  const blob=data instanceof Blob?data:new Blob([data],{type:mime});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=nom; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+async function enregistrer(nom, data, mime){
+  if(canPick()){
+    try{ const h=await pickHandle(nom, mime); await writeHandle(h, data, mime); return true; }
+    catch(e){ if(e && e.name==='AbortError') return false; }   // annulé par l'utilisateur → ne rien enregistrer
+  }
+  download(nom, data, mime); return true;
+}
+function dl(name,text,mime){ enregistrer(name, text, mime); }
+function expCSV(){
+  let rows=[['Piece A','Nom A','Cat A','Piece B','Nom B','Cat B','Cible STC','Longueur (m)','Portes','Statut']];
+  for(const p of P){ const k=pairKey(p);
+    const len=Math.round(p.segments.reduce((a,s)=>a+s.len_m,0)*10)/10;
+    rows.push([p.a,p.name_a,state.cats[p.ca],p.b,p.name_b,state.cats[p.cb],stcOf(p),len,
+      p.portes||0,
+      state.excluded[k]?'ignoree':(state.overrides[k]!=null?'forcee':'auto')]); }
+  for(const m of state.manual)
+    rows.push(['-','Cloison manuelle','','-','','',m.stc,m.len_m,'','manuelle']);
+  (D.portes||[]).forEach((pt,i)=>{
+    if(state.portesEtat[i]!=null)
+      rows.push(['-','Porte détectée','','-','','',state.portesEtat[i],pt.r_m,'','porte']);
+  });
+  for(const pm of state.portes_man)
+    rows.push(['-','Porte manuelle','','-','','',pm.stc,
+      Math.round(Math.hypot(pm.lx-pm.x,pm.ly-pm.y)/PT_PER_M*100)/100,'','porte']);
+  dl('cibles_STC_valide.csv','﻿'+rows.map(r=>r.join(';')).join('\r\n'),'text/csv');
+}
+function etatValidation(){
+  const geometry={}; for(const p of P) geometry[pairKey(p)]=p.segments;
+  return {sheet:D.sheet,cats:state.cats,overrides:state.overrides,
+    excluded:state.excluded,matrix:state.matrix,geometry,
+    manual:state.manual,polys:state.polys,newRooms:state.newRooms,
+    portes_man:state.portes_man,portes_etat:state.portesEtat,
+    zonage,portes_aff,echelle:D.echelle,last_stc:lastSTC,last_stc_porte:lastSTCPorte,
+    calc:calcState};
+}
+function expJSON(){
+  dl('validation_STC.json',JSON.stringify(etatValidation(),null,1),'application/json');
+}
+function copieHTML(){
+  fermerMenus(); aideClavier(false);          // ne pas figer un menu ouvert dans la copie
+  const tag=document.getElementById('d0');
+  const old=tag.textContent;
+  const D2=Object.assign({},D,{etat_client:etatValidation()});
+  tag.textContent=JSON.stringify(D2).replace(/<\//g,'<\\/');
+  const html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+  tag.textContent=old;
+  return html;
+}
+async function saveHTML(){
+  const nom=(D.sheet||'plan').replace(/\.pdf$/i,'')+'_STC.html';
+  const ok=await enregistrer(nom, copieHTML(), 'text/html');
+  if(ok){ lastSave=Date.now(); majSaveState();
+          toast('Projet enregistré', nom, 'ok'); }
+}
+async function expJPG(){
+  let handle=null;
+  if(canPick()){ try{ handle=await pickHandle('plan_cibles_STC.jpg','image/jpeg'); }
+    catch(e){ if(e && e.name==='AbortError') return; } }
+  const img=document.getElementById('bg');
+  const w=img.naturalWidth, h=img.naturalHeight;
+  const clone=svg.cloneNode(true);
+  clone.querySelectorAll('.hnd').forEach(n=>n.remove());
+  clone.querySelectorAll('.room').forEach(n=>{
+    if(!zonage){ n.remove(); return; }
+    n.setAttribute('fill-opacity','0.3');
+  });
+  clone.querySelectorAll('.excl').forEach(n=>{
+    n.setAttribute('opacity','0.25'); n.setAttribute('stroke-dasharray','6 5'); });
+  clone.querySelectorAll('text').forEach(n=>n.setAttribute('font-family','Arial,sans-serif'));
+  clone.setAttribute('width',w); clone.setAttribute('height',h);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  const xml=new XMLSerializer().serializeToString(clone);
+  const url=URL.createObjectURL(new Blob([xml],{type:'image/svg+xml'}));
+  const im=new Image();
+  im.onload=()=>{
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const ctx=c.getContext('2d');
+    ctx.drawImage(img,0,0,w,h);
+    ctx.drawImage(im,0,0,w,h);
+    URL.revokeObjectURL(url);
+    c.toBlob(b=>{ if(handle) writeHandle(handle, b, 'image/jpeg');
+      else download('plan_cibles_STC.jpg', b, 'image/jpeg'); },
+      'image/jpeg',0.92);
+  };
+  im.src=url;
+}
+function ensurePptx(){
+  if(!window.PptxGenJS)
+    (0,eval)(new TextDecoder().decode(b64bytes('pptx_b64')));
+}
+async function expPPT(retour){
+  ensurePptx();
+  const PPTMIME='application/vnd.openxmlformats-officedocument.presentationml.presentation';
+  const pptFn=(D.sheet||'plan').replace(/\.pdf$/i,'')+'_STC.pptx';
+  let pptHandle=null;
+  if(!retour && canPick()){ try{ pptHandle=await pickHandle(pptFn, PPTMIME); }
+    catch(e){ if(e && e.name==='AbortError') return; } }
+  const pptx=new PptxGenJS();
+  pptx.defineLayout({name:'W', width:13.33, height:7.5});
+  pptx.layout='W';
+  const s=pptx.addSlide();
+  const c=D.clip, cw=c[2]-c[0], chh=c[3]-c[1];
+  const MX=0.25, MY=0.25, MAXW=9.7, MAXH=7.0;
+  const sc=Math.min(MAXW/cw, MAXH/chh);
+  const pw=cw*sc, ph=chh*sc;
+  const ox=MX, oy=MY+(MAXH-ph)/2;
+  const X=x=>Math.round((ox+(x-c[0])*sc)*1000)/1000;
+  const Y=y=>Math.round((oy+(y-c[1])*sc)*1000)/1000;
+  const hx=col=>col.slice(1).toUpperCase();
+  const S=sc*72;   // 1 unité-plan -> points typographiques sur la diapo
+  // etiquette a l'echelle du modele : x,y = coin haut-gauche en unites plan,
+  // memes dimensions (30x11 ou 26x11) et meme police (8 unites-plan) que le SVG
+  const etiq=(txt,x,y,wpt,hpt,col)=>{
+    s.addText(txt,{shape:pptx.shapes.ROUNDED_RECTANGLE,
+      x:X(x), y:Y(y), w:Math.round(wpt*sc*1000)/1000, h:Math.round(hpt*sc*1000)/1000,
+      fill:{color:hx(col)}, line:{type:'none'}, rectRadius:Math.round(2*sc*1000)/1000,
+      fontSize:Math.max(2, Math.round(8*S*10)/10), bold:true, color:'FFFFFF',
+      align:'center', valign:'middle', margin:0, fit:'none', wrap:false});
+  };
+  const chip=(txt,cx,cy,col,horiz)=>{
+    const ox2=horiz===false?14:0, oy2=horiz===false?0:12;
+    etiq(txt, cx-15+ox2, cy-6+oy2, 30, 11, col);
+  };
+  const ligne=(p1,p2,col,widthPt,dash)=>{
+    const x1=X(p1[0]), y1=Y(p1[1]), x2=X(p2[0]), y2=Y(p2[1]);
+    const o={x:Math.min(x1,x2), y:Math.min(y1,y2),
+             w:Math.round(Math.abs(x2-x1)*1000)/1000, h:Math.round(Math.abs(y2-y1)*1000)/1000,
+             line:{color:hx(col), width:widthPt, dashType:dash||'solid'}};
+    if((x2-x1)*(y2-y1)<0) o.flipV=true;
+    s.addShape(pptx.shapes.LINE,o);
+  };
+  const polyligne=(pts,opts)=>{ // custGeom ; ignoré silencieusement si non supporté
+    try{
+      const xs=pts.map(p=>X(p[0])), ys=pts.map(p=>Y(p[1]));
+      const x0=Math.min(...xs), y0=Math.min(...ys);
+      const w=Math.max(0.01, Math.max(...xs)-x0), h=Math.max(0.01, Math.max(...ys)-y0);
+      const points=pts.map(p=>({x:Math.round((X(p[0])-x0)*1000)/1000,
+                                y:Math.round((Y(p[1])-y0)*1000)/1000}));
+      if(opts.fermer) points.push({close:true});
+      s.addShape(pptx.shapes.CUSTOM_GEOMETRY,
+        Object.assign({x:x0, y:y0, w, h, points}, opts.props));
+    }catch(e){}
+  };
+  // fond de plan
+  s.addImage({data:document.getElementById('bg').src, x:ox, y:oy, w:pw, h:ph});
+  // zonage
+  if(zonage)
+    for(const [cid,pts] of Object.entries(state.polys))
+      polyligne(pts,{fermer:true, props:{
+        fill:{color:hx(catColor(state.cats[cid])), transparency:70},
+        line:{type:'none'}}});
+  // cloisons + etiquettes
+  for(const p of P){
+    const k=pairKey(p);
+    if(state.excluded[k]) continue;
+    const v=stcOf(p), col=colorOf(v);
+    let lab=false;
+    for(const seg of [...p.segments].sort((a,b)=>b.len_m-a.len_m)){
+      ligne(seg.p1, seg.p2, col, 4*S);
+      if(!lab && seg.len_m>=1){ chip('STC '+v, seg.cx, seg.cy, col, seg.horiz); lab=true; }
+    }
+  }
+  for(const m of state.manual){
+    ligne(m.p1, m.p2, colorOf(m.stc), 4*S);
+    if(m.len_m>=0.6) chip('STC '+m.stc, m.cx, m.cy, colorOf(m.stc), m.horiz);
+  }
+  // portes
+  if(portes_aff){
+    (D.portes||[]).forEach((pt,i)=>{
+      const stcP=state.portesEtat[i];
+      const col=stcP!=null?colorOf(stcP):'#8d6e63';
+      const r4=4*sc;   // rayon 4 unites-plan, comme sur le modele
+      s.addShape(pptx.shapes.OVAL,{x:X(pt.x)-r4, y:Y(pt.y)-r4, w:2*r4, h:2*r4,
+        fill:{color:hx(col)}, line:{color:'FFFFFF', width:Math.max(0.25,1.2*S)}});
+      if(stcP!=null) etiq('P '+stcP, pt.x+5, pt.y-13, 26, 11, col);
+    });
+    for(const pm of state.portes_man){
+      const col=colorOf(pm.stc);
+      ligne([pm.x,pm.y],[pm.lx,pm.ly], col, 2.5*S);
+      const dx=pm.lx-pm.x, dy=pm.ly-pm.y, arc=[];
+      for(let t=0;t<=10;t++){
+        const a=t/10*Math.PI/2;
+        arc.push([pm.x+dx*Math.cos(a)-dy*Math.sin(a),
+                  pm.y+dx*Math.sin(a)+dy*Math.cos(a)]);
+      }
+      polyligne(arc,{props:{fill:{type:'none'},
+        line:{color:hx(col), width:Math.max(0.25,1.2*S), dashType:'dash'}}});
+      const r3=3*sc;
+      s.addShape(pptx.shapes.OVAL,{x:X(pm.x)-r3, y:Y(pm.y)-r3, w:2*r3, h:2*r3,
+        fill:{color:hx(col)}, line:{type:'none'}});
+      etiq('P '+pm.stc, pm.x+5, pm.y+4, 26, 11, col);
+    }
+  }
+  // colonne de droite : titre, stats, legendes
+  s.addText('Cibles STC — '+(D.sheet||''),
+    {x:10.05, y:0.3, w:3.1, h:0.7, fontSize:15, bold:true});
+  s.addText(D.vision_note||'', {x:10.05, y:1.0, w:3.1, h:0.8, fontSize:8.5, color:'666666'});
+  let ly=1.9;
+  s.addText('Légende', {x:10.05, y:ly, w:3, h:0.28, fontSize:11, bold:true}); ly+=0.34;
+  for(const [k,cl] of Object.entries(COLORS)){
+    s.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:10.05, y:ly, w:0.5, h:0.19,
+      fill:{color:hx(cl)}, line:{type:'none'}, rectRadius:0.04});
+    s.addText('STC '+k, {x:10.62, y:ly-0.04, w:1.2, h:0.26, fontSize:9});
+    ly+=0.26;
+  }
+  if(zonage){
+    ly+=0.12;
+    s.addText('Zonage', {x:10.05, y:ly, w:3, h:0.28, fontSize:11, bold:true}); ly+=0.34;
+    for(const cat of D.cats){
+      s.addShape(pptx.shapes.RECTANGLE,{x:10.05, y:ly, w:0.3, h:0.19,
+        fill:{color:hx(catColor(cat)), transparency:40}, line:{type:'none'}});
+      s.addText(cat, {x:10.42, y:ly-0.04, w:2.7, h:0.26, fontSize:9});
+      ly+=0.26;
+    }
+  }
+  s.addText('Formes éditables : glissez les traits/étiquettes au besoin. '+
+    'Rappel : STC porte ≥ STC cloison − 10.',
+    {x:10.05, y:6.9, w:3.1, h:0.5, fontSize:7.5, color:'888888'});
+  if(retour) return pptx.write('base64');
+  if(pptHandle){ const blob=await pptx.write('blob'); await writeHandle(pptHandle, blob, PPTMIME); }
+  else await pptx.writeFile({fileName:pptFn});
+}
+function applyState(j){
+  if(j.echelle){ D.echelle=j.echelle; PT_PER_M=2834.6457/j.echelle;
+    document.getElementById('srvinfo').textContent=
+      (D.vision_note||'')+' · finesse '+(D.finesse??'?')+' · 1/'+(D.echelle??100); }
+  Object.assign(state.cats,j.cats||{}); state.overrides=j.overrides||{};
+  state.excluded=j.excluded||{}; Object.assign(state.matrix,j.matrix||{});
+  state.manual=(j.manual||[]); state.manual.forEach(segMeta);
+  if(j.polys) state.polys=j.polys;
+  state.newRooms=j.newRooms||{};
+  nrCount=Math.max(0,...Object.keys(state.newRooms).map(k=>+k.replace('NR','')||0));
+  initPairs(j.geometry); P.forEach(p=>p.segments.forEach(segMeta));
+  selRoom=selPair=selSeg=selPorte=null;
+  if(j.last_stc) lastSTC=j.last_stc;
+  if(j.last_stc_porte) lastSTCPorte=j.last_stc_porte;
+  state.portes_man=j.portes_man||[];
+  state.portesEtat=j.portes_etat||{};
+  portes_aff=(j.portes_aff!==false);
+  document.getElementById('m_portes').classList.toggle('on', portes_aff);
+  if(j.calc && j.calc.rows) calcState=j.calc;
+  setZonage(!!j.zonage); matrixTable(); panel(); majUndoUI();
+}
+function impJSON(ev){ const f=ev.target.files[0]; if(!f)return;
+  f.text().then(tx=>{ pushUndo(); applyState(JSON.parse(tx)); });
+}
+function ouvrirEditeur(payload, bgURL){
+  D=payload;
+  if(bgURL) document.getElementById('bg').src=bgURL;
+  const c=payload.clip;
+  svg.setAttribute('viewBox',`${c[0]} ${c[1]} ${c[2]-c[0]} ${c[3]-c[1]}`);
+  PT_PER_M=2834.6457/(payload.echelle||100);
+  document.getElementById('accueil').style.display='none';
+  document.getElementById('approot').style.display='flex';
+  initEditeur();
+}
+function initEditeur(){
+  state={cats:{}, overrides:{}, excluded:{}, matrix:{...D.matrix},
+         manual:[], polys:JSON.parse(JSON.stringify(D.polys)), newRooms:{},
+         portes_man:[], portesEtat:{}};
+  for(const [c,r] of Object.entries(D.rooms)) state.cats[c]=r.cat;
+  nrCount=0; selRoom=selPair=selSeg=selPorte=null; drag=null; zonage=false; portes_aff=true;
+  undoStack=[]; redoStack=[]; _snap=null; calibA=null; majUndoUI();
+  calcInit();
+  initPairs();
+  const nom=(D.sheet||'plan').replace(/\.pdf$/i,'');
+  document.title='Cibles STC — '+nom;
+  document.getElementById('titre').textContent=nom;
+  document.getElementById('srvinfo').textContent=
+    '1/'+(D.echelle??100)+' · finesse '+(D.finesse??'?');
+  const pi=document.getElementById('prjinfo');
+  if(pi) pi.textContent=D.vision_note||'';
+  document.getElementById('srvctl').style.display = pdfDoc ? '' : 'none';
+  if(pdfDoc){ document.getElementById('srv_f').value=D.finesse??4;
+              document.getElementById('srv_fv').textContent=D.finesse??4; }
+  lastSave=null; majSaveState(); majChrome();
+  setZonage(false); setPortes(true);
+  legend(); matrixTable(); setView('plan'); setTab('val'); setMode('select');
+  majZoom(1);
+  if(D.etat_client) applyState(D.etat_client);
+  panel();
+}
+
+// ======================= chrome V2 : menus, volets, aide =====================
+const ICO_CHECK='<svg width="12" height="12" viewBox="0 0 24 24" fill="none"'+
+  ' stroke="currentColor" stroke-width="3" stroke-linecap="round" class="ico">'+
+  '<use href="#i-check"/></svg>';
+function fermerMenus(){
+  document.querySelectorAll('.menu.on,.pop.on').forEach(n=>n.classList.remove('on'));
+}
+function basculerMenu(id, ev){
+  if(ev) ev.stopPropagation();
+  const n=document.getElementById(id); if(!n) return;
+  const etait=n.classList.contains('on');
+  fermerMenus();
+  if(!etait) n.classList.add('on');
+}
+function basculerFold(id){ document.getElementById(id).classList.toggle('open'); }
+function aideClavier(on){ document.getElementById('kbdlay').classList.toggle('on', !!on); }
+document.addEventListener('click', fermerMenus);
+document.querySelectorAll('.menu,.pop').forEach(function(n){
+  n.addEventListener('click', function(e){ e.stopPropagation(); }); });
+
+let _toastT=null;
+function toast(txt, sous, type){
+  const t=document.getElementById('toast'); if(!t) return;
+  t.className='on'+(type?' '+type:'');
+  t.innerHTML='<div style="flex:1"><div style="color:var(--texte)">'+ech(txt)+'</div>'+
+    (sous?'<div class="muted" style="font-size:10.5px">'+ech(sous)+'</div>':'')+'</div>';
+  clearTimeout(_toastT);
+  _toastT=setTimeout(function(){ t.classList.remove('on'); }, 4500);
+}
+
+// « enregistre il y a n min » : le seul repere fiable quand tout est local
+let lastSave=null;
+function majSaveState(){
+  const w=document.getElementById('savestate'), t=document.getElementById('savetxt');
+  if(!w||!t) return;
+  if(!lastSave){ w.style.visibility='hidden'; return; }
+  const sec=Math.round((Date.now()-lastSave)/1000);
+  t.textContent = sec<60 ? 'Enregistré à l\'instant'
+    : 'Enregistré il y a '+Math.round(sec/60)+' min';
+  w.style.visibility='visible';
+}
+setInterval(majSaveState, 30000);
+
+// les onglets Calculateur et Bonnes pratiques s'ouvrent sans plan : on desarme
+// alors ce qui n'a pas de sens (l'onglet Plan, la sauvegarde, les exports).
+function majChrome(){
+  const avecPlan=!!state;
+  document.getElementById('nav_plan').disabled=!avecPlan;
+  document.getElementById('btnsavehtml').disabled=!avecPlan;
+  document.getElementById('projchip').style.display=avecPlan?'':'none';
+  if(!avecPlan) document.getElementById('savestate').style.visibility='hidden';
+}
+
+// coordonnees du curseur, en metres depuis le coin du plan
+planDiv.addEventListener('mousemove', function(e){
+  const xy=document.getElementById('sb_xy'); if(!xy||!D) return;
+  const p=svgPt(e), c=D.clip;
+  xy.textContent='x '+fr((p.x-c[0])/PT_PER_M,2)+' m · y '+fr((c[3]-p.y)/PT_PER_M,2)+' m';
+});
+planDiv.addEventListener('mouseleave', function(){
+  const xy=document.getElementById('sb_xy'); if(xy) xy.textContent=''; });
+
+// ---- demarrage : fichier sauvegarde ? mode test ? ----
+(function(){
+  const d0=JSON.parse(document.getElementById('d0').textContent||'null');
+  if(d0){ ouvrirEditeur(d0, null); return; }
+  const q=new URLSearchParams(location.search);
+  if(q.get('pdf') && location.protocol.startsWith('http')){
+    (async()=>{
+      try{
+        statut('TEST : chargement '+q.get('pdf'));
+        const buf=await (await fetch(q.get('pdf'))).arrayBuffer();
+        pdfDoc=await pdfjsLib.getDocument({data:buf}).promise;
+        pdfNom=q.get('pdf').split('/').pop();
+        pageChoisie=(+q.get('page')||1)-1;
+        await lancerAnalyse(pageChoisie, +q.get('finesse')||4, +q.get('echelle')||100);
+        if(q.get('post')){
+          const res={note:D.vision_note, rooms:Object.keys(D.rooms).length,
+                     pairs:D.pairs.length, portes:D.portes.length,
+                     esc:Object.values(D.rooms).filter(r=>r.escalier).length,
+                     npolys:Object.keys(D.polys).length,
+                     clip:D.clip};
+          await fetch('/result',{method:'POST',body:JSON.stringify(res,null,1)});
+        }
+        if(q.get('savehtml')){
+          setZonage(true);
+          const cc0=D.clip, mx=(cc0[0]+cc0[2])/2, my=(cc0[1]+cc0[3])/2;
+          state.portes_man.push({x:mx,y:my,lx:mx+0.9*PT_PER_M,ly:my,stc:35});
+          if((D.portes||[]).length) state.portesEtat[0]=30;
+          render();
+          await fetch('/result_html',{method:'POST',body:copieHTML()});
+        }
+        if(q.get('pptx')){
+          setZonage(true);
+          if(!state.portes_man.length){
+            const cc1=D.clip, mx1=(cc1[0]+cc1[2])/2, my1=(cc1[1]+cc1[3])/2;
+            state.portes_man.push({x:mx1,y:my1,lx:mx1+0.9*PT_PER_M,ly:my1,stc:35});
+            if((D.portes||[]).length) state.portesEtat[0]=30;
+            render();
+          }
+          const b64=await expPPT(true);
+          await fetch('/result_pptx',{method:'POST',body:b64});
+        }
+      }catch(e){ statut('TEST échec : '+(e.message||e), true);
+        if(q.get('post')) fetch('/result',{method:'POST',body:JSON.stringify({error:String(e.stack||e)})});
+      }
+    })();
+  }
+})();
+</script></body></html>

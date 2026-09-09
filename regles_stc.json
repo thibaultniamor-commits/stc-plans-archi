@@ -1,0 +1,50 @@
+{
+  "referentiel": "Classes generiques LEED v4 EQ Acoustic Performance - PARAMETRABLE",
+  "note": "Cibles STC pour cloisons pleine hauteur. Portes/vitrages a traiter separement (STC porte >= STC mur - 10 typ.)",
+  "ordre": ["confidentiel", "conference", "technique", "circulation", "prive", "collaboratif"],
+  "categories": {
+    "collaboratif": ["bureau partage", "open space", "aire ouverte", "bipe", "aire tranquille",
+                     "aire familles", "salle polyvalente", "cuisine", "cafeteria", "atelier",
+                     "gymnase", "salle d'attente", "accueil", "papeterie"],
+    "prive":        ["bureau individuel", "bureau ferme", "bureau"],
+    "conference":   ["salle de reunion", "reunion", "conference", "visioconference", "formation"],
+    "circulation":  ["circulation", "corridor", "couloir", "escalier", "ascenseur", "vestibule",
+                     "hall", "monte-charge", "rangement", "depot", "distribution"],
+    "technique":    ["mecanique", "salle electrique", "electrique", "telecom", "informatique",
+                     "ventilation", "chaufferie"],
+    "confidentiel": ["intervention", "counseling", "consultation", "entrevue", "allaitement",
+                     "toilette", "infirmerie", "ressources humaines", "direction"]
+  },
+  "descriptions": {
+    "collaboratif": "Collaboratif / multi-usage : plateaux partages, salles polyvalentes, cuisine, gymnase",
+    "prive":        "Prive : bureaux individuels ou fermes",
+    "conference":   "Salle de conference / reunion",
+    "circulation":  "Zone de circulation : couloirs, escaliers, vestibules, rangements",
+    "technique":    "Local technique / salle mecanique / electrique",
+    "confidentiel": "Confidentiel : intervention, consultation, sante, toilettes"
+  },
+  "matrice_stc": {
+    "_comment": "cle = 'catA|catB' triee alphabetiquement; valeur = STC cible (base LEED v4)",
+    "circulation|circulation": 35,
+    "circulation|collaboratif": 35,
+    "circulation|conference": 45,
+    "circulation|confidentiel": 45,
+    "circulation|prive": 40,
+    "circulation|technique": 50,
+    "collaboratif|collaboratif": 40,
+    "collaboratif|conference": 50,
+    "collaboratif|confidentiel": 50,
+    "collaboratif|prive": 45,
+    "collaboratif|technique": 55,
+    "conference|conference": 50,
+    "conference|confidentiel": 53,
+    "conference|prive": 50,
+    "conference|technique": 55,
+    "confidentiel|confidentiel": 53,
+    "confidentiel|prive": 50,
+    "confidentiel|technique": 60,
+    "prive|prive": 45,
+    "prive|technique": 55,
+    "technique|technique": 40
+  }
+}
