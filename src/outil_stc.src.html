@@ -132,9 +132,13 @@ button.nav.on{ background:#2a3a63; color:#fff; font-weight:600; }
 #savestate{ display:flex; align-items:center; gap:6px; color:var(--ok); font-size:11.5px;
   white-space:nowrap; }
 .menuwrap{ position:relative; }
-.menu{ position:absolute; top:36px; right:0; min-width:250px; z-index:40; padding:6px;
+/* Menus et popovers sont en position fixe et posés par poserMenu() : la barre
+   d'outils est haute de 42 px et coupe à overflow:hidden — tout ce qui s'ouvre
+   en dessous y disparaissait. */
+.menu{ position:fixed; top:0; left:0; min-width:250px; z-index:40; padding:6px;
   background:var(--carte); border:1px solid var(--bd); border-radius:6px;
-  box-shadow:0 10px 24px rgba(0,0,0,.45); display:none; flex-direction:column; gap:2px; }
+  box-shadow:0 10px 24px rgba(0,0,0,.45); display:none; flex-direction:column; gap:2px;
+  max-width:320px; max-height:calc(100vh - 80px); overflow-y:auto; }
 .menu.on{ display:flex; }
 .menu button{ height:30px; justify-content:flex-start; background:transparent; color:var(--texte);
   font-weight:400; width:100%; }
@@ -151,10 +155,15 @@ button.nav.on{ background:#2a3a63; color:#fff; font-weight:600; }
   overflow:hidden; }
 /* la barre se degarnit avant de deborder : d'abord les raccourcis, puis les
    libelles des outils — les infobulles et l'aide clavier les portent toujours. */
-@media (max-width:1640px){ #zoombar .kbd{ display:none; } }
-@media (max-width:1420px){
-  #zoombar .tgrp.ex .tbtn{ width:28px; padding:0; justify-content:center; }
-  #zoombar .tgrp.ex .tbtn span:not(.dot){ display:none; }
+@media (max-width:1680px){ #zoombar .kbd{ display:none; } }   /* mesuré : 1309 px garnie */
+/* Les libellés d'outils sont des nœuds texte, pas des span : les masquer demande
+   font-size:0 sur le bouton, l'icone portant ses dimensions en attribut. Mesuré :
+   la barre garnie réclame 1177 px, soit une fenêtre d'au moins ~1537 px avec le
+   volet latéral — c'est là que le rang tombe. */
+@media (max-width:1540px){
+  #zoombar .tgrp.ex .tbtn{ width:28px; padding:0; gap:0; justify-content:center;
+    font-size:0; overflow:hidden; }
+  #zoombar .tgrp.ex .tbtn span{ display:none; }
 }
 .tgrp{ display:flex; align-items:center; gap:4px; }
 .tgrp.ex{ background:var(--groupe); border-radius:5px; padding:4px; }
@@ -170,9 +179,10 @@ button.tbtn.ic{ width:28px; padding:0; }
 button.tbtn:disabled{ color:#5a657f; border-color:transparent; background:transparent; }
 .dot{ width:8px; height:8px; border-radius:2px; flex:none; }
 #zoomval{ min-width:48px; text-align:center; color:var(--titre); font-variant-numeric:tabular-nums; }
-.pop{ position:absolute; top:38px; width:272px; padding:12px; z-index:30;
+.pop{ position:fixed; top:0; left:0; width:272px; padding:12px; z-index:40;
   background:var(--carte); border:1px solid var(--bd); border-radius:6px;
-  box-shadow:0 10px 24px rgba(0,0,0,.45); display:none; }
+  box-shadow:0 10px 24px rgba(0,0,0,.45); display:none;
+  max-height:calc(100vh - 80px); overflow-y:auto; }
 .pop.on{ display:block; }
 
 /* ---------- plan ---------- */
@@ -644,7 +654,7 @@ button.ptab.on .cnt{ color:#cfe0ff; }
     </div>
   </div>
 
-  <div class="pop" id="pop_ac" style="right:150px">
+  <div class="pop" id="pop_ac">
     <h3>Tolérance de soudure</h3>
     <div class="muted" style="margin-top:4px">Deux extrémités plus proches que cette distance sont alignées puis fusionnées. Les cloisons sont d'abord redressées à l'horizontale ou à la verticale.</div>
     <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
@@ -4725,16 +4735,30 @@ const ICO_CHECK='<svg width="12" height="12" viewBox="0 0 24 24" fill="none"'+
 function fermerMenus(){
   document.querySelectorAll('.menu.on,.pop.on').forEach(n=>n.classList.remove('on'));
 }
+// bouton d'ancrage par défaut, pour les appels qui ne viennent pas d'un clic
+const ANCRES={pop_ac:'btn_autoconnect'};
+function poserMenu(n, btn){
+  if(!btn) return;
+  const r=btn.getBoundingClientRect();
+  const w=n.offsetWidth, h=n.offsetHeight;
+  const x=Math.max(8, Math.min(r.right-w, innerWidth-w-8));
+  const y=Math.max(8, Math.min(r.bottom+4, innerHeight-h-8));
+  n.style.left=Math.round(x)+'px';
+  n.style.top=Math.round(y)+'px';
+}
 function basculerMenu(id, ev){
   if(ev) ev.stopPropagation();
   const n=document.getElementById(id); if(!n) return;
   const etait=n.classList.contains('on');
   fermerMenus();
-  if(!etait) n.classList.add('on');
+  if(etait) return;
+  n.classList.add('on');
+  poserMenu(n, (ev && ev.currentTarget) || document.getElementById(ANCRES[id]));
 }
 function basculerFold(id){ document.getElementById(id).classList.toggle('open'); }
 function aideClavier(on){ document.getElementById('kbdlay').classList.toggle('on', !!on); }
 document.addEventListener('click', fermerMenus);
+window.addEventListener('resize', fermerMenus);
 document.querySelectorAll('.menu,.pop').forEach(function(n){
   n.addEventListener('click', function(e){ e.stopPropagation(); }); });
 

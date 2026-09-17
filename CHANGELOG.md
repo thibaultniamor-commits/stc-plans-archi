@@ -4,6 +4,33 @@ Les versions suivent [SemVer](https://semver.org/lang/fr/) : `MAJEUR.MINEUR.CORR
 Le numéro vit dans le fichier `VERSION` ; `build.py` l'inscrit dans `index.html`,
 où il s'affiche dans le pied de l'accueil et à côté du logo dans l'éditeur.
 
+## 2.1.1 — 2026-09-17
+
+### Corrigé
+
+- **Les menus de la barre d'outils ne s'ouvraient pas.** « Auto-connexion » et
+  « Page / PDF » basculaient bien, mais s'affichaient *à l'intérieur* de la barre,
+  haute de 42 px et coupée à `overflow:hidden` : ils étaient intégralement rognés,
+  donc invisibles et non cliquables. Comme le bouton « Relancer l'analyse » vit
+  dans le menu « Page / PDF », il était lui aussi inatteignable — impossible de
+  relancer le moteur une fois dans l'éditeur. Menus et popovers sont désormais en
+  position fixe et posés sous leur bouton, en restant dans la fenêtre. *Le défaut
+  existait déjà en 2.0.0.*
+- **Barre d'outils tronquée entre 1421 et 1536 px de fenêtre.** Le rang de
+  dégarnissage tombait à 1420 px alors que la barre garnie réclame 1177 px, soit
+  une fenêtre d'au moins ~1537 px avec le volet latéral : « Page / PDF » était
+  coupé en « Page / PD ». Seuils mesurés et replacés (1540 px pour les libellés
+  d'outils, 1680 px pour les raccourcis clavier).
+- **Le masquage des libellés d'outils ne masquait rien.** La règle visait
+  `span:not(.dot)` alors que les libellés sont des nœuds texte : les boutons
+  rétrécissaient à 28 px et le texte débordait par-dessus ses voisins.
+
+### Ajouté
+
+- Le banc d'essai vérifie maintenant que les menus sont *atteignables au clic*
+  (`elementFromPoint`), que « Relancer l'analyse » aboutit depuis l'éditeur, et
+  que le dernier groupe de la barre tient dans la barre. 39 vérifications.
+
 ## 2.1.0 — 2026-09-17
 
 ### Ajouté

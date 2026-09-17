@@ -91,6 +91,9 @@ async function main() {
   });
   await cdp('Runtime.enable');
   await cdp('Page.enable');
+  // fenetre fixe : les rangs de degarnissage de la barre d'outils s'y jouent
+  await cdp('Emulation.setDeviceMetricsOverride',
+    { width: 1500, height: 1000, deviceScaleFactor: 1, mobile: false });
   await cdp('Page.navigate', { url: 'file:///' + OUTIL.replace(/\\/g, '/') });
   await dors(2500);
 
@@ -110,6 +113,24 @@ async function main() {
     statut: document.getElementById('acc_status').textContent,
     err: document.getElementById('acc_status').className === 'err'
   });
+  // « visible » au sens strict : dans la fenetre ET atteignable au clic — c'est
+  // ce qui attrape un menu rogne par un overflow:hidden.
+  window.__visible = (sel) => {
+    const n = document.querySelector(sel);
+    if (!n) return false;
+    const r = n.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return false;
+    const e = document.elementFromPoint(x, y);
+    return !!(e && (e === n || n.contains(e) || e.contains(n)));
+  };
+  window.__barre = () => {
+    const zb = document.getElementById('zoombar');
+    const mw = zb.querySelector('.menuwrap');
+    return { debord: Math.round(mw.getBoundingClientRect().right
+                                - zb.getBoundingClientRect().right) };
+  };
   window.__plan = () => D ? ({
     rooms: Object.keys(D.rooms).length, pairs: D.pairs.length,
     portes: (D.portes||[]).length, note: D.vision_note, echelle: D.echelle,
@@ -142,6 +163,28 @@ async function main() {
   verif('PDF vectoriel : locaux detectes', p && p.rooms >= 12, JSON.stringify(p && {r:p.rooms,c:p.pairs,d:p.portes}));
   verif('PDF vectoriel : noms de locaux lus', p && p.nomsLus >= 10, p && ('' + p.nomsLus));
   verif('PDF vectoriel : echelle juste (local ~29 m2)', p && p.aireMed > 25 && p.aireMed < 32, p && (p.aireMed + ' m2'));
+  // 2b — la barre d'outils et ses menus, qu'un overflow:hidden rognait
+  verif('barre d’outils : le dernier groupe tient dans la barre',
+    (await evalue('__barre()')).debord <= 0, JSON.stringify(await evalue('__barre()')));
+  await evalue("document.getElementById('btn_autoconnect').click()");
+  await dors(300);
+  verif('Auto-connexion : le popover est visible et cliquable',
+    await evalue(`__visible('#pop_ac button')`));
+  await evalue("fermerMenus()");
+  await evalue(`[...document.querySelectorAll('.menuwrap .tbtn')]
+    .find(b=>b.textContent.includes('Page')).click()`);
+  await dors(300);
+  verif('Page / PDF : le menu est visible et cliquable',
+    await evalue(`__visible('#m_page button')`));
+  verif('Page / PDF : relancer l’analyse y est offert',
+    await evalue(`__visible('#srvctl button')`));
+  await evalue("fermerMenus()");
+  await evalue("relancer()");
+  await dors(4000);
+  verif('relancer l’analyse depuis l’éditeur aboutit',
+    await evalue("document.getElementById('approot').style.display!=='none' && !!D && D.pairs.length>0"),
+    JSON.stringify(await evalue('__plan() && {r:__plan().rooms, c:__plan().pairs}')));
+
   await evalue("retourAccueil()");
 
   // 3 — PDF scanne
