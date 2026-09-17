@@ -4,6 +4,15 @@ Les versions suivent [SemVer](https://semver.org/lang/fr/) : `MAJEUR.MINEUR.CORR
 Le numéro vit dans le fichier `VERSION` ; `build.py` l'inscrit dans `index.html`,
 où il s'affiche dans le pied de l'accueil et à côté du logo dans l'éditeur.
 
+## 2.2.0 — 2026-09-17
+
+### Modifié
+
+- **Relancer l'analyse ne repasse plus par l'accueil.** Le moteur tourne sur
+  place, derrière un voile qui montre l'étape courante et une jauge « étape n / 10 ».
+  Le plan reste à l'écran. Si l'analyse échoue, le voile le dit et le relevé en
+  cours est rendu intact — seul le bouton *Fermer* le referme.
+
 ## 2.1.1 — 2026-09-17
 
 ### Corrigé

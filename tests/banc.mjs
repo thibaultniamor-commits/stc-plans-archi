@@ -179,10 +179,23 @@ async function main() {
   verif('Page / PDF : relancer l’analyse y est offert',
     await evalue(`__visible('#srvctl button')`));
   await evalue("fermerMenus()");
-  await evalue("relancer()");
-  await dors(4000);
-  verif('relancer l’analyse depuis l’éditeur aboutit',
-    await evalue("document.getElementById('approot').style.display!=='none' && !!D && D.pairs.length>0"),
+  // relance sur place : on observe pendant, puis apres
+  await evalue("window.__relance = relancer(); true");
+  await dors(400);
+  const pendant = await evalue(`({voile: document.getElementById('calclay').classList.contains('on'),
+    accueil: document.getElementById('accueil').style.display,
+    etape: document.getElementById('calc_num').textContent})`);
+  verif('relance : le voile s’affiche sans repasser par l’accueil',
+    pendant.voile && pendant.accueil === 'none', JSON.stringify(pendant));
+  await evalue("(async()=>{ await window.__relance; })()");
+  await dors(500);
+  const apres = await evalue(`({voile: document.getElementById('calclay').classList.contains('on'),
+    accueil: document.getElementById('accueil').style.display,
+    editeur: document.getElementById('approot').style.display})`);
+  verif('relance : le voile se referme et l’éditeur reste en place',
+    !apres.voile && apres.editeur !== 'none' && apres.accueil === 'none', JSON.stringify(apres));
+  verif('relance : le plan est bien ré-analysé',
+    await evalue("!!D && D.pairs.length>0"),
     JSON.stringify(await evalue('__plan() && {r:__plan().rooms, c:__plan().pairs}')));
 
   await evalue("retourAccueil()");

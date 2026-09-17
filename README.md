@@ -36,6 +36,9 @@ double-clic.
   STC ; calibrer l'échelle en deux clics sur une cote connue ; auto-connexion
   (redressement et soudure des extrémités) avec tolérance réglable. Annuler /
   rétablir sur toute la session.
+- **Relance sur place** — changer la finesse et relancer le moteur se fait depuis
+  le plan, sans repasser par l'accueil : un voile montre l'étape courante, et si
+  l'analyse échoue le relevé en cours est rendu intact.
 - **Conformité** — le STC composite de chaque cloison portant une porte est
   calculé et comparé à sa cible ; les écarts sont listés et cliquables.
 - **Calculateur STCc** — combinaison énergétique de N éléments, part de l'énergie

@@ -322,6 +322,22 @@ button.ptab.on .cnt{ color:#cfe0ff; }
 #kbdbox dt{ justify-self:start; }
 #kbdbox dd{ margin:0; color:var(--aide); font-size:11.5px; }
 
+/* ---------- analyse en cours, sans quitter l'editeur ---------- */
+#calclay{ position:fixed; inset:0; z-index:85; background:rgba(13,18,32,.62);
+  display:none; align-items:center; justify-content:center; }
+#calclay.on{ display:flex; }
+#calcbox{ width:380px; max-width:92vw; padding:16px; background:var(--carte);
+  border:1px solid var(--bd); border-radius:6px; box-shadow:0 16px 40px rgba(0,0,0,.5); }
+#calcbox .jauge{ height:6px; margin-top:12px; border-radius:3px; background:var(--piste);
+  overflow:hidden; }
+#calcbox .jauge i{ display:block; height:100%; width:0; border-radius:3px;
+  background:var(--acc); transition:width .18s ease; }
+#calcbox .pied{ display:flex; align-items:baseline; justify-content:space-between;
+  gap:12px; margin-top:8px; }
+#calcerr{ display:none; margin-top:12px; padding:10px 12px; border-radius:5px;
+  background:rgba(192,57,43,.12); border:1px solid rgba(192,57,43,.35);
+  color:var(--err); font-size:11.5px; line-height:1.55; }
+
 /* ---------- notification ---------- */
 #toast{ position:fixed; left:50%; bottom:44px; transform:translateX(-50%); z-index:70;
   display:none; align-items:center; gap:8px; padding:12px; min-width:280px;
@@ -669,6 +685,20 @@ button.ptab.on .cnt{ color:#cfe0ff; }
     <div class="muted" style="margin-top:8px">Ctrl+Z revient en arrière si le résultat ne convient pas.</div>
   </div>
 </div>
+
+<div id="calclay" role="status" aria-live="polite"><div id="calcbox">
+  <div style="color:var(--titre);font-weight:600;font-size:13.5px" id="calc_titre">Analyse en cours</div>
+  <div class="muted" id="calc_etape" style="margin-top:4px">Préparation…</div>
+  <div class="jauge"><i id="calc_jauge"></i></div>
+  <div class="pied" id="calc_pied">
+    <span class="muted num" id="calc_num">étape 1 / 10</span>
+    <span class="muted">Le relevé en cours est conservé si l'analyse échoue.</span>
+  </div>
+  <div id="calcerr"></div>
+  <div style="display:flex;justify-content:flex-end;margin-top:12px">
+    <button class="sec" id="calc_fermer" style="display:none" onclick="calculFermer()">Fermer</button>
+  </div>
+</div></div>
 
 <div id="plan"><div id="wrap"><img id="bg" alt="">
 <svg id="ov" viewBox="0 0 1 1" preserveAspectRatio="none"></svg>
@@ -2833,26 +2863,69 @@ document.getElementById('btnanalyser').onclick=()=>lancerAnalyse(pageChoisie,
   +document.getElementById('finesse').value, +document.getElementById('echelle').value||100);
 document.getElementById('btnmanuel').onclick=()=>lancerManuel();
 
-async function lancerAnalyse(pageNo, finesse, echelle){
+// `suivi` reçoit l'avancement : la ligne d'état de l'accueil pour une première
+// analyse, le voile de l'éditeur pour une relance.
+async function lancerAnalyse(pageNo, finesse, echelle, suivi){
+  const dire = (suivi && suivi.dire) || statut;
+  const echec = (suivi && suivi.echec) || (m => statut('Échec : '+m, true));
   try{
     document.getElementById('btnanalyser').disabled=true;
-    statut('Extraction vectorielle…');
+    dire('Extraction vectorielle…');
     if(SRC.kind==='dxf') echelle=100;             // le DXF porte ses propres unités
     const extr=await SRC.extraire(pageNo);
-    const payload=await MOTEUR.analyser(extr, finesse, echelle, statut);
-    statut('Rendu du fond de plan…');
+    const payload=await MOTEUR.analyser(extr, finesse, echelle, dire);
+    dire('Rendu du fond de plan…');
     const bg=await SRC.fond(pageNo, payload.clip);
     payload.sheet=SRC.nom;
     payload.source=SRC.kind;
     ouvrirEditeur(payload, bg);
-    statut('');
+    dire('');
+    return true;
   }catch(e){
     console.error(e);
-    statut('Échec : '+(e.message||e), true);
+    echec(e.message||String(e));
+    return false;
   }finally{
     document.getElementById('btnanalyser').disabled=false;
   }
 }
+
+// ---- voile d'analyse : relancer le moteur sans quitter le plan ----
+// L'analyse jalonne son avancement par des libellés ; on les compte pour la
+// jauge. Une étape de plus ou de moins ne casse rien : la barre est bornée.
+const ETAPES_ANALYSE=10;
+let _calcN=0;
+function calculOuvrir(titre){
+  _calcN=0;
+  document.getElementById('calc_titre').textContent=titre;
+  document.getElementById('calc_etape').textContent='Préparation…';
+  document.getElementById('calc_jauge').style.width='0%';
+  document.getElementById('calc_jauge').parentElement.style.display='';
+  document.getElementById('calc_num').textContent='étape 1 / '+ETAPES_ANALYSE;
+  const e=document.getElementById('calcerr'); e.style.display='none'; e.textContent='';
+  document.getElementById('calc_pied').style.display='';
+  document.getElementById('calc_fermer').style.display='none';
+  document.getElementById('calclay').classList.add('on');
+}
+function calculEtape(txt){
+  if(!txt) return;
+  _calcN=Math.min(ETAPES_ANALYSE, _calcN+1);
+  document.getElementById('calc_etape').textContent=txt;
+  document.getElementById('calc_jauge').style.width=
+    Math.round(100*_calcN/ETAPES_ANALYSE)+'%';
+  document.getElementById('calc_num').textContent=
+    'étape '+_calcN+' / '+ETAPES_ANALYSE;
+}
+function calculErreur(msg){
+  document.getElementById('calc_titre').textContent='Analyse interrompue';
+  document.getElementById('calc_etape').textContent='Votre relevé est resté tel quel.';
+  document.getElementById('calc_jauge').parentElement.style.display='none';
+  document.getElementById('calc_pied').style.display='none';   // jauge et compteur sans objet ici
+  const e=document.getElementById('calcerr');
+  e.textContent=msg; e.style.display='block';
+  document.getElementById('calc_fermer').style.display='';
+}
+function calculFermer(){ document.getElementById('calclay').classList.remove('on'); }
 
 // Relevé manuel : le fond est chargé tel quel, sans aucune détection. Tous les
 // outils de tracé de l'éditeur restent disponibles.
@@ -2879,19 +2952,22 @@ async function lancerManuel(){
   }
 }
 
-function relancer(){
+// Relancer se fait sur place : l'accueil n'a pas à reparaître, le voile suffit.
+async function relancer(){
   if(!SRC||!SRC.analysable) return;
-  retourEditeurApresAnalyse=true;
-  document.getElementById('approot').style.display='none';
-  document.getElementById('accueil').style.display='flex';
-  lancerAnalyse(pageChoisie, +document.getElementById('srv_f').value,
-                D&&D.echelle||100);
+  fermerMenus();
+  calculOuvrir('Nouvelle analyse de la page');
+  await new Promise(r=>setTimeout(r,40));        // laisser le voile se peindre
+  const ok=await lancerAnalyse(pageChoisie, +document.getElementById('srv_f').value,
+                               D&&D.echelle||100,
+                               {dire:calculEtape, echec:calculErreur});
+  if(ok){ calculFermer(); toast('Analyse relancée',
+    Object.keys(D.rooms).length+' pièces · '+D.pairs.length+' cloisons · finesse '+D.finesse, 'ok'); }
 }
 function retourAccueil(){
   document.getElementById('approot').style.display='none';
   document.getElementById('accueil').style.display='flex';
 }
-let retourEditeurApresAnalyse=false;
 
 // ================== editeur ==================
 let D=null;
