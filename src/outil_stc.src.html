@@ -81,6 +81,30 @@ input[type=range]{ accent-color:var(--acc); vertical-align:middle; }
   cursor:pointer; text-align:center; font-size:10.5px; color:var(--aide); background:var(--panneau); }
 #vignettes .pg.on{ border-color:var(--acc); background:var(--avant); color:var(--titre); font-weight:600; }
 #vignettes canvas{ display:block; width:100%; height:auto; border-radius:2px; background:#f2f3f5; }
+#vignettes .vph{ height:56px; background:#f2f3f5; border-radius:2px; }
+#vignettes .pgl{ margin-top:4px; }
+/* badge de diagnostic : ce que le moteur saura faire de la page */
+.dg{ display:inline-block; margin-top:3px; padding:1px 6px; border-radius:9px;
+  font-size:9.5px; font-weight:600; letter-spacing:.02em; border:1px solid; }
+.dg.ok{ color:#a9d4a9; border-color:rgba(143,185,143,.5); background:rgba(46,125,82,.2); }
+.dg.wrn{ color:#ffcf6b; border-color:rgba(240,165,0,.45); background:rgba(240,165,0,.14); }
+.dg.err{ color:var(--err); border-color:rgba(192,57,43,.5); background:rgba(192,57,43,.16); }
+.diag{ display:flex; align-items:flex-start; gap:8px; margin-top:12px; padding:10px 12px;
+  border-radius:5px; border:1px solid var(--bd); background:var(--groupe);
+  color:var(--second); font-size:11.5px; line-height:1.55; }
+.diag .dg{ margin-top:0; flex:none; }
+.diag.wrn{ border-color:rgba(240,165,0,.35); background:rgba(240,165,0,.08); }
+.diag.err{ border-color:rgba(192,57,43,.35); background:rgba(192,57,43,.09); }
+/* calques d'un DXF : nom, poids, rôle */
+#dxf_liste{ max-height:236px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+#dxf_liste .lyr{ display:flex; align-items:center; gap:10px; padding:4px 6px; border-radius:4px;
+  background:var(--groupe); }
+#dxf_liste .lyrn{ flex:1; min-width:0; color:var(--texte); overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; }
+#dxf_liste .lyrc{ flex:none; width:118px; text-align:right; }
+#dxf_liste .lyrb{ flex:none; display:flex; gap:3px; width:186px; }
+#dxf_liste .segbtn{ height:24px; font-size:11px; }
+#dxf_avert.err{ color:var(--err); font-size:11.5px; line-height:1.55; }
 #acc_status{ color:var(--aide); font-size:11.5px; min-height:18px; }
 #acc_status.err{ color:var(--err); }
 #pdfinfo{ display:flex; align-items:center; gap:12px; padding:12px; background:var(--avant);
@@ -92,6 +116,8 @@ input[type=range]{ accent-color:var(--acc); vertical-align:middle; }
   background:var(--barre); border-bottom:1px solid var(--bord); }
 #brand{ display:flex; align-items:center; gap:8px; font-weight:600; color:var(--titre);
   font-size:15px; white-space:nowrap; }
+#brand #ver{ font-style:normal; font-weight:500; font-size:10.5px; color:var(--label);
+  letter-spacing:.02em; margin-left:-3px; align-self:flex-start; margin-top:3px; }
 #projchip{ display:flex; align-items:center; gap:6px; height:24px; padding:0 8px;
   background:var(--panneau); border:1px solid rgba(255,255,255,.10); border-radius:12px;
   max-width:380px; overflow:hidden; }
@@ -349,19 +375,20 @@ button.ptab.on .cnt{ color:#cfe0ff; }
 
   <div>
     <div style="color:var(--titre);font-size:22px;font-weight:600;letter-spacing:-.01em">Nouveau relevé de cibles STC</div>
-    <div class="muted" style="margin-top:4px">Trois étapes : déposer le PDF vectoriel exporté de la CAO, choisir la page, lancer l'analyse.</div>
+    <div class="muted" style="margin-top:4px">Trois étapes : déposer le plan exporté de la CAO, choisir la page, lancer l'analyse.</div>
   </div>
 
   <div class="card" style="padding:16px">
     <div class="stephd">
       <span class="step" id="step1">1</span>
-      <h3>Plan PDF</h3>
+      <h3>Plan</h3>
       <div style="flex:1"></div>
       <button class="sec" id="btnchangepdf" style="height:28px;display:none" onclick="document.getElementById('fpdf').click()">Changer de fichier</button>
     </div>
     <div style="margin-top:12px">
-      <div id="drop">Glissez le PDF ici, ou cliquez pour choisir un fichier
-        <input type="file" id="fpdf" accept=".pdf" style="display:none"></div>
+      <div id="drop">Glissez le plan ici, ou cliquez pour choisir un fichier
+        <span class="muted" style="display:block;margin-top:6px">PDF vectoriel · SVG · DXF — ou une image (PNG, JPG) à relever à la main</span>
+        <input type="file" id="fpdf" accept=".pdf,.svg,.dxf,.png,.jpg,.jpeg,.webp" style="display:none"></div>
       <div id="pdfinfo" style="display:none">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8ab4ff" stroke-width="1.5" stroke-linecap="round" class="ico"><use href="#i-file"/></svg>
         <div style="flex:1;min-width:0">
@@ -375,12 +402,30 @@ button.ptab.on .cnt{ color:#cfe0ff; }
   <div class="card" id="card_page" style="padding:16px;display:none">
     <div class="stephd">
       <span class="step">2</span>
-      <h3>Page à analyser</h3>
-      <span class="muted">— un niveau par page</span>
+      <h3 id="pgttl">Page à analyser</h3>
+      <span class="muted" id="pgsub">— un niveau par page</span>
       <div style="flex:1"></div>
       <span class="muted" id="pagesel">—</span>
     </div>
     <div style="margin-top:12px"><div id="vignettes"></div></div>
+    <div id="diag_zone" class="diag" style="display:none"></div>
+  </div>
+
+  <div class="card" id="card_dxf" style="padding:16px;display:none">
+    <div class="stephd">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8ab4ff" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-layers"/></svg>
+      <h3>Calques du DXF</h3>
+      <span class="muted">— ce qui tient lieu de mur</span>
+      <div style="flex:1"></div>
+      <span class="muted" id="dxf_unites"></span>
+      <select id="dxf_unit" style="height:26px;width:104px" onchange="dxfUnites(this.value)">
+        <option value="">unités auto</option>
+        <option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option>
+        <option value="in">pouces</option><option value="ft">pieds</option>
+      </select>
+    </div>
+    <div id="dxf_avert" class="muted" style="margin-top:8px"></div>
+    <div id="dxf_liste" style="margin-top:12px"></div>
   </div>
 
   <div class="card" id="acc_params" style="padding:16px;display:none">
@@ -399,7 +444,7 @@ button.ptab.on .cnt{ color:#cfe0ff; }
           <button class="preset" onclick="document.getElementById('echelle').value=50">50</button>
           <button class="preset" onclick="document.getElementById('echelle').value=200">200</button>
         </div>
-        <div class="muted" style="margin-top:6px">Ou calibrez à l'écran en cliquant deux points d'une cote connue.</div>
+        <div class="muted" style="margin-top:6px" id="ech_note">Ou calibrez à l'écran en cliquant deux points d'une cote connue.</div>
       </div>
       <div style="flex:1;min-width:280px">
         <div style="display:flex;align-items:baseline;justify-content:space-between">
@@ -418,7 +463,10 @@ button.ptab.on .cnt{ color:#cfe0ff; }
       <button id="btnanalyser" style="height:36px;font-size:13.5px">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="ico"><use href="#i-check"/></svg>
         <span id="btnanalyser_txt">Analyser la page</span></button>
-      <span class="muted">L'analyse se fait sur votre poste ; vous pourrez la relancer avec une autre finesse depuis le plan.</span>
+      <button id="btnmanuel" class="sec" style="height:36px;font-size:13.5px;display:none">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-wall"/></svg>
+        Tracer à la main sur ce fond</button>
+      <span class="muted" id="acc_hint">L'analyse se fait sur votre poste ; vous pourrez la relancer avec une autre finesse depuis le plan.</span>
     </div>
   </div>
 
@@ -441,13 +489,16 @@ button.ptab.on .cnt{ color:#cfe0ff; }
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
       <div style="display:flex;gap:8px">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8fb98f" stroke-width="2.2" stroke-linecap="round" class="ico" style="margin-top:2px"><use href="#i-check"/></svg>
-        <span class="muted">Un PDF <b style="color:var(--texte)">vectoriel</b> exporté de la CAO — pas un scan ni une image.</span></div>
+        <span class="muted">Un <b style="color:var(--texte)">DXF</b>, ou un PDF / SVG <b style="color:var(--texte)">vectoriel</b> exporté de la CAO. L'outil vous dit, page par page, ce qu'il saura en tirer.</span></div>
       <div style="display:flex;gap:8px">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8fb98f" stroke-width="2.2" stroke-linecap="round" class="ico" style="margin-top:2px"><use href="#i-check"/></svg>
         <span class="muted">Les <b style="color:var(--texte)">numéros et noms de locaux</b> présents sur le plan.</span></div>
       <div style="display:flex;gap:8px">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8fb98f" stroke-width="2.2" stroke-linecap="round" class="ico" style="margin-top:2px"><use href="#i-check"/></svg>
-        <span class="muted">Une <b style="color:var(--texte)">cote connue</b> sur le plan pour caler l'échelle si le 1/100 n'est pas exact.</span></div>
+        <span class="muted">Une <b style="color:var(--texte)">cote connue</b> sur le plan pour caler l'échelle si le 1/100 n'est pas exact — inutile en DXF, qui porte ses unités.</span></div>
+      <div style="display:flex;gap:8px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f0a500" stroke-width="2.2" stroke-linecap="round" class="ico" style="margin-top:2px"><use href="#i-alert"/></svg>
+        <span class="muted">Un <b style="color:var(--texte)">scan ou une image</b> ne donne rien à extraire : l'outil le charge comme fond et vous tracez les cloisons à la main.</span></div>
     </div>
   </div>
 
@@ -468,7 +519,7 @@ button.ptab.on .cnt{ color:#cfe0ff; }
 <div id="acc_foot">
   <span>Aucun serveur, aucune connexion — le fichier reste sur votre poste.</span>
   <div style="flex:1"></div>
-  <span>Version 2 · LEED v4 · WELL v2 · ANSI/ASA S12.60 · CNB 2020</span>
+  <span>Version __VERSION__ · LEED v4 · WELL v2 · ANSI/ASA S12.60 · CNB 2020</span>
 </div>
 </div>
 
@@ -477,7 +528,7 @@ button.ptab.on .cnt{ color:#cfe0ff; }
 <div id="topnav">
   <span id="brand">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-logo"/></svg>
-    Cibles STC</span>
+    Cibles STC<i id="ver">__VERSION__</i></span>
   <span id="projchip"><span id="titre"></span><span id="srvinfo"></span></span>
 
   <div id="ruban">
@@ -1376,7 +1427,9 @@ async function analyser(extr, finesse, echelle, progress){
   for(const d of sombres) for(const s of lignesUtiles(d))
     segsWL.push([d.w, Math.hypot(s[0]-s[2], s[1]-s[3])]);
   if(!segsWL.length) throw new Error('Aucun trait détecté sur cette page (PDF scanné ou image ?)');
-  let [murMin, noteSeuil] = seuilMurs(segsWL, 0.45);
+  // Le DXF donne lui-même le seuil : ses largeurs sont fabriquées d'après les
+  // calques, il n'y a rien à deviner dans leur distribution.
+  let [murMin, noteSeuil] = extr.murMin ? [extr.murMin, null] : seuilMurs(segsWL, 0.45);
   const notes = noteSeuil ? [noteSeuil] : [];
 
   let xs=[], ys=[];
@@ -1649,8 +1702,32 @@ async function analyser(extr, finesse, echelle, progress){
           vision_note:stats, echelle, finesse};
 }
 
+// ---- diagnostic commun : ce que le moteur saura faire de la page ----
+// Les mêmes compteurs servent au PDF, au SVG et au DXF, pour que le badge
+// affiché à l'accueil promette exactement ce que l'analyse saura tenir.
+const SEUIL_SEG = 120;     // en dessous : pas de géométrie exploitable
+const SEUIL_MOTS = 8;      // en dessous : pas de libellés de locaux
+const SEUIL_IMG = 0.5;     // part de la page couverte par une seule image
+
+function diagnostic(cpt, nMots){
+  const seg = cpt.seg|0, aplat = cpt.aplat|0, couv = cpt.couvImg||0;
+  let niveau;
+  if(seg < SEUIL_SEG && couv >= SEUIL_IMG) niveau = 'image';
+  else if(seg < SEUIL_SEG) niveau = 'vide';
+  else if(nMots < SEUIL_MOTS) niveau = 'sansTexte';
+  else niveau = 'vectoriel';
+  // Le moteur ne lit que les traits : des murs dessinés en aplat plein
+  // (poché) passeraient pour du vectoriel sans jamais donner de cloison.
+  const note = (niveau !== 'image' && aplat > Math.max(300, seg*2))
+    ? 'beaucoup d’aplats pleins : des murs en poché ne seraient pas lus'
+    : null;
+  return {niveau, seg, nMots, aplat, couvImg:couv, note};
+}
+
 // ---- extraction pdf.js ----
-async function extraire(pdfPage){
+// Un seul parcours de la liste d'opérateurs sert l'extraction et le diagnostic.
+// En mode léger on compte sans retenir la géométrie (diagnostic de toutes les pages).
+async function balayerPDF(pdfPage, leger){
   const vp=pdfPage.getViewport({scale:1});
   const op=await pdfPage.getOperatorList();
   const O=pdfjsLib.OPS, F=op.fnArray, A=op.argsArray;
@@ -1660,6 +1737,34 @@ async function extraire(pdfPage){
   const ap=(m,x,y)=>[m[0]*x+m[2]*y+m[4], m[1]*x+m[3]*y+m[5]];
   const stack=[]; let ctm=vp.transform.slice(), lw=1, rgb=[0,0,0], dashed=false;
   const drawings=[];
+  const cpt={seg:0, aplat:0, couvImg:0};
+  const airePage=(vp.width*vp.height)||1;
+  // pdf.js rend le chemin AVANT les operateurs d'etat quand le flux les place
+  // entre la construction et la peinture : on garde le chemin de cote et on le
+  // materialise sur l'operateur de peinture, avec l'etat qui s'applique alors.
+  let attente=null;
+  const finir=type=>{
+    if(!attente) return;
+    const {subs, co, ctm:m}=attente; attente=null;
+    const sc=Math.sqrt(Math.abs(m[0]*m[3]-m[1]*m[2]))||1;
+    const d={type, w:lw*sc, rgb:rgb.slice(), dashed, items:[]};
+    const px=(x,y)=>[m[0]*x+m[2]*y+m[4], m[1]*x+m[3]*y+m[5]];
+    let kk=0, cur=null, start=null;
+    for(const s of subs){
+      if(s===O.moveTo){ cur=px(co[kk],co[kk+1]); kk+=2; start=cur; d.items.push(null); }
+      else if(s===O.lineTo){
+        const p2=px(co[kk],co[kk+1]); kk+=2;
+        if(cur) d.items.push([cur[0],cur[1],p2[0],p2[1]]);
+        cur=p2;
+      }
+      else if(s===O.curveTo){ cur=px(co[kk+4],co[kk+5]); kk+=6; d.items.push(null); }
+      else if(s===O.curveTo2||s===O.curveTo3){ cur=px(co[kk+2],co[kk+3]); kk+=4; d.items.push(null); }
+      else if(s===O.closePath){ if(cur&&start) d.items.push([cur[0],cur[1],start[0],start[1]]); cur=start; }
+      else if(s===O.rectangle){ kk+=4; d.items.push(null); }
+    }
+    let n=0; for(const x of d.items) if(x) n++;
+    if(n){ cpt.seg+=n; if(!leger) drawings.push(d); }
+  };
   for(let i=0;i<F.length;i++){
     const f=F[i];
     if(f===O.save) stack.push([ctm.slice(),lw,rgb.slice(),dashed]);
@@ -1671,33 +1776,24 @@ async function extraire(pdfPage){
     else if(f===O.setStrokeCMYKColor){ const [c1,m1,y1,k1]=A[i];
       rgb=[255*(1-Math.min(1,c1+k1)),255*(1-Math.min(1,m1+k1)),255*(1-Math.min(1,y1+k1))]; }
     else if(f===O.setDash) dashed=!!(A[i][0]&&A[i][0].length);
-    else if(f===O.constructPath){
-      const nxt=F[i+1];
-      let type=null;
-      if(nxt===O.stroke||nxt===O.closeStroke) type='s';
-      else if(nxt===O.fillStroke||nxt===O.eoFillStroke||
-              nxt===O.closeFillStroke||nxt===O.closeEOFillStroke) type='fs';
-      if(!type) continue;
-      const subs=A[i][0], co=A[i][1];
-      const sc=Math.sqrt(Math.abs(ctm[0]*ctm[3]-ctm[1]*ctm[2]))||1;
-      const d={type, w:lw*sc, rgb:rgb.slice(), dashed, items:[]};
-      let kk=0, cur=null, start=null;
-      for(const s of subs){
-        if(s===O.moveTo){ cur=ap(ctm,co[kk],co[kk+1]); kk+=2; start=cur; d.items.push(null); }
-        else if(s===O.lineTo){
-          const p2=ap(ctm,co[kk],co[kk+1]); kk+=2;
-          if(cur) d.items.push([cur[0],cur[1],p2[0],p2[1]]);
-          cur=p2;
-        }
-        else if(s===O.curveTo){ const p2=ap(ctm,co[kk+4],co[kk+5]); kk+=6; cur=p2; d.items.push(null); }
-        else if(s===O.curveTo2||s===O.curveTo3){ const p2=ap(ctm,co[kk+2],co[kk+3]); kk+=4; cur=p2; d.items.push(null); }
-        else if(s===O.closePath){ if(cur&&start) d.items.push([cur[0],cur[1],start[0],start[1]]); cur=start; }
-        else if(s===O.rectangle){ kk+=4; d.items.push(null); }
-      }
-      if(d.items.some(x=>x)) drawings.push(d);
+    else if(f===O.paintImageXObject||f===O.paintInlineImageXObject||
+            f===O.paintImageXObjectRepeat){
+      // une image est peinte dans le carré unité : son aire vaut |det(ctm)|
+      const a=Math.abs(ctm[0]*ctm[3]-ctm[1]*ctm[2])/airePage;
+      if(a>cpt.couvImg) cpt.couvImg=a;
     }
+    else if(f===O.constructPath) attente={subs:A[i][0], co:A[i][1], ctm:ctm.slice()};
+    else if(f===O.stroke||f===O.closeStroke) finir('s');
+    else if(f===O.fillStroke||f===O.eoFillStroke||
+            f===O.closeFillStroke||f===O.closeEOFillStroke) finir('fs');
+    else if(f===O.fill||f===O.eoFill){ if(attente){ cpt.aplat++; attente=null; } }
+    else if(f===O.endPath) attente=null;
   }
-  const tc=await pdfPage.getTextContent();
+  return {drawings, cpt, vp};
+}
+
+function motsPDF(tc, vp){
+  const ap=(m,x,y)=>[m[0]*x+m[2]*y+m[4], m[1]*x+m[3]*y+m[5]];
   const words=[];
   for(const it of tc.items){
     if(!it.str||!it.str.trim()) continue;
@@ -1715,7 +1811,23 @@ async function extraire(pdfPage){
       words.push({x:p[0], y:p[1], x0:p[0]-ww/2, y0:p[1]-(it.height||0)/2, s:w});
     }
   }
-  return {drawings, words, pw:vp.width, ph:vp.height};
+  return words;
+}
+
+async function extraire(pdfPage){
+  const b=await balayerPDF(pdfPage, false);
+  const words=motsPDF(await pdfPage.getTextContent(), b.vp);
+  return {drawings:b.drawings, words, pw:b.vp.width, ph:b.vp.height,
+          diag:diagnostic(b.cpt, words.length)};
+}
+
+// Diagnostic seul : appelé après le rendu de la vignette, où pdf.js a déjà mis
+// la liste d'opérateurs en cache — le surcoût est négligeable.
+async function diagnostiquerPDF(pdfPage){
+  const b=await balayerPDF(pdfPage, true);
+  const tc=await pdfPage.getTextContent();
+  let n=0; for(const it of tc.items) if(it.str && it.str.trim()) n++;
+  return diagnostic(b.cpt, n);
 }
 
 async function rendreFond(pdfPage, clipArr){
@@ -1724,33 +1836,751 @@ async function rendreFond(pdfPage, clipArr){
   const c=document.createElement('canvas');
   c.width=Math.round(vpz.width); c.height=Math.round(vpz.height);
   await pdfPage.render({canvasContext:c.getContext('2d'), viewport:vpz}).promise;
+  return recadrer(c, clipArr, sc);
+}
+
+// ---- fond de plan : recadrage commun à toutes les sources ----
+// Le SVG de l'éditeur se superpose au fond avec preserveAspectRatio="none" :
+// l'image rendue doit couvrir exactement le rectangle `clip`.
+function recadrer(canvas, clipArr, sc){
   const [x0,y0,x1,y1]=clipArr;
-  const cw=Math.round((x1-x0)*sc), chh=Math.round((y1-y0)*sc);
+  const cw=Math.max(1,Math.round((x1-x0)*sc)), chh=Math.max(1,Math.round((y1-y0)*sc));
   const c2=document.createElement('canvas'); c2.width=cw; c2.height=chh;
-  c2.getContext('2d').drawImage(c, Math.round(x0*sc), Math.round(y0*sc), cw, chh, 0, 0, cw, chh);
+  const g=c2.getContext('2d');
+  g.fillStyle='#fff'; g.fillRect(0,0,cw,chh);
+  g.drawImage(canvas, Math.round(x0*sc), Math.round(y0*sc), cw, chh, 0, 0, cw, chh);
   return c2.toDataURL('image/jpeg', 0.72);
 }
 
-return {analyser, extraire, rendreFond};
+function chargerImage(url){
+  return new Promise((ok,ko)=>{
+    const im=new Image();
+    im.onload=()=>ok(im);
+    im.onerror=()=>ko(new Error('image illisible'));
+    im.src=url;
+  });
+}
+
+// Fond issu d'un fichier image : ramené à une largeur raisonnable et réencodé
+// en JPEG, puisqu'il voyagera ensuite dans la sauvegarde HTML.
+const IMG_MAX=3600;
+async function fondImage(url){
+  const im=await chargerImage(url);
+  const w0=im.naturalWidth||im.width, h0=im.naturalHeight||im.height;
+  if(!w0||!h0) throw new Error('image de taille nulle');
+  const k=Math.min(1, IMG_MAX/Math.max(w0,h0));
+  const w=Math.round(w0*k), h=Math.round(h0*k);
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const g=c.getContext('2d');
+  g.fillStyle='#fff'; g.fillRect(0,0,w,h);
+  g.drawImage(im,0,0,w,h);
+  return {url:c.toDataURL('image/jpeg',0.8), w, h};
+}
+
+// =================== lecture SVG ===================
+// On confie la géométrie au navigateur : le SVG est posé hors écran, puis
+// chaque élément est lu à travers sa matrice courante. Même convention que le
+// PDF — on ne garde que les tracés au trait ; les courbes ne donnent pas de
+// segment, elles rompent la polyligne.
+
+const UNITES_CSS={px:0.75, pt:1, pc:12, mm:72/25.4, cm:720/25.4, 'in':72, q:72/25.4/4};
+function longueurPt(v, def){
+  if(v==null) return def;
+  const m=String(v).trim().match(/^(-?[\d.]+)\s*([a-z%]*)$/i);
+  if(!m) return def;
+  const n=parseFloat(m[1]);
+  if(!isFinite(n)) return def;
+  const u=(m[2]||'px').toLowerCase();
+  if(u==='%') return def;
+  return n*(UNITES_CSS[u]!=null?UNITES_CSS[u]:0.75);
+}
+
+function parseRGB(s){
+  const m=String(s||'').match(/rgba?\(([^)]+)\)/);
+  if(!m) return null;
+  const p=m[1].split(/[\s,\/]+/).filter(x=>x).map(parseFloat);
+  if(p.length<3 || !isFinite(p[0])) return null;
+  if(p.length>=4 && p[3]===0) return null;      // transparent : rien de tracé
+  return [p[0],p[1],p[2]];
+}
+
+// Découpe l'attribut `d` en polylignes. Les commandes de courbe (C S Q T A)
+// déplacent le point courant sans produire de segment, comme dans le PDF.
+function polysDeD(d){
+  const t=String(d).match(/[a-zA-Z]|-?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g);
+  if(!t) return [];
+  const out=[]; let i=0, cmd='', x=0, y=0, sx=0, sy=0, cur=null;
+  const nb=()=>parseFloat(t[i++]);
+  const fin=()=>{ if(cur&&cur.length>1) out.push(cur); cur=null; };
+  const go=(nx,ny,trace)=>{
+    if(trace){ if(!cur) cur=[[x,y]]; cur.push([nx,ny]); }
+    else { fin(); cur=[[nx,ny]]; }
+    x=nx; y=ny;
+  };
+  while(i<t.length){
+    if(/[a-zA-Z]/.test(t[i])) cmd=t[i++];
+    else if(cmd==='M') cmd='L'; else if(cmd==='m') cmd='l';
+    const rel=cmd===cmd.toLowerCase(), c=cmd.toUpperCase();
+    if(c==='M'){ const a=nb(), b=nb(); fin(); x=rel?x+a:a; y=rel?y+b:b; sx=x; sy=y; cur=[[x,y]]; }
+    else if(c==='L'){ const a=nb(), b=nb(); go(rel?x+a:a, rel?y+b:b, true); }
+    else if(c==='H'){ const a=nb(); go(rel?x+a:a, y, true); }
+    else if(c==='V'){ const a=nb(); go(x, rel?y+a:a, true); }
+    else if(c==='Z'){ if(cur){ cur.push([sx,sy]); } fin(); x=sx; y=sy; }
+    else if(c==='C'){ i+=4; const a=nb(), b=nb(); go(rel?x+a:a, rel?y+b:b, false); }
+    else if(c==='S'||c==='Q'){ i+=2; const a=nb(), b=nb(); go(rel?x+a:a, rel?y+b:b, false); }
+    else if(c==='T'){ const a=nb(), b=nb(); go(rel?x+a:a, rel?y+b:b, false); }
+    else if(c==='A'){ i+=5; const a=nb(), b=nb(); go(rel?x+a:a, rel?y+b:b, false); }
+    else { i++; }                                  // commande inconnue : on saute
+  }
+  fin();
+  return out;
+}
+
+function polysDeForme(el){
+  const n=el.tagName.toLowerCase();
+  const at=k=>parseFloat(el.getAttribute(k)||'0')||0;
+  if(n==='line') return [[[at('x1'),at('y1')],[at('x2'),at('y2')]]];
+  if(n==='polyline'||n==='polygon'){
+    const nums=(el.getAttribute('points')||'').match(/-?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g)||[];
+    const pts=[];
+    for(let i=0;i+1<nums.length;i+=2) pts.push([parseFloat(nums[i]),parseFloat(nums[i+1])]);
+    if(pts.length<2) return [];
+    if(n==='polygon') pts.push(pts[0].slice());
+    return [pts];
+  }
+  if(n==='rect'){
+    const x=at('x'), y=at('y'), w=at('width'), h=at('height');
+    if(!(w>0&&h>0)) return [];
+    return [[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]]];
+  }
+  if(n==='path') return polysDeD(el.getAttribute('d')||'');
+  return [];                                       // cercles / ellipses : courbes
+}
+
+function svgHorsEcran(texte){
+  const doc=new DOMParser().parseFromString(texte,'image/svg+xml');
+  if(doc.querySelector('parsererror')) throw new Error('SVG illisible (XML invalide)');
+  const root=doc.documentElement;
+  if(!root || root.tagName.toLowerCase()!=='svg')
+    throw new Error("ce fichier n'est pas un SVG");
+  const vb=(root.getAttribute('viewBox')||'').trim()
+    .split(/[\s,]+/).map(parseFloat).filter(v=>isFinite(v));
+  const boite=(vb.length===4 && vb[2]>0 && vb[3]>0) ? vb : null;
+  // Largeur physique du dessin : c'est elle qui donne l'échelle en points.
+  let pw=longueurPt(root.getAttribute('width'), null);
+  let ph=longueurPt(root.getAttribute('height'), null);
+  if(pw==null||ph==null){
+    if(boite){ pw=boite[2]*0.75; ph=boite[3]*0.75; }
+    else throw new Error('SVG sans dimensions ni viewBox');
+  }
+  if(!(pw>0&&ph>0)) throw new Error('SVG de taille nulle');
+  const live=document.importNode(root, true);
+  live.setAttribute('width', pw); live.setAttribute('height', ph);
+  if(boite) live.setAttribute('viewBox', boite.join(' '));
+  const host=document.createElement('div');
+  host.style.cssText='position:fixed;left:-30000px;top:0;width:'+pw+'px;height:'+ph+'px';
+  host.appendChild(live);
+  document.body.appendChild(host);
+  return {host, live, pw, ph};
+}
+
+const HORS_RENDU='defs,clipPath,mask,marker,symbol,pattern';
+
+function lireSVG(texte){
+  const {host, live, pw, ph} = svgHorsEcran(texte);
+  try{
+    const racine=live.getScreenCTM();
+    if(!racine) throw new Error('SVG non rendu par le navigateur');
+    const inv=racine.inverse();
+    const drawings=[], words=[];
+    const cpt={seg:0, aplat:0, couvImg:0};
+    for(const im of live.querySelectorAll('image')){
+      if(im.closest(HORS_RENDU)) continue;
+      const m=im.getScreenCTM(); if(!m) continue;
+      const w=parseFloat(im.getAttribute('width')||'0'), h=parseFloat(im.getAttribute('height')||'0');
+      const q=inv.multiply(m);
+      const a=Math.abs(w*h*(q.a*q.d-q.b*q.c))/((pw*ph)||1);
+      if(a>cpt.couvImg) cpt.couvImg=a;
+    }
+    for(const el of live.querySelectorAll('path,line,polyline,polygon,rect')){
+      if(el.closest(HORS_RENDU)) continue;
+      const cs=getComputedStyle(el);
+      if(cs.display==='none'||cs.visibility==='hidden'||parseFloat(cs.opacity||'1')===0) continue;
+      const rgb=parseRGB(cs.stroke);
+      if(!rgb || cs.stroke==='none' || parseFloat(cs.strokeOpacity||'1')===0){
+        if(cs.fill && cs.fill!=='none') cpt.aplat++;
+        continue;
+      }
+      const m0=el.getScreenCTM(); if(!m0) continue;
+      const m=inv.multiply(m0);
+      const sc=Math.sqrt(Math.abs(m.a*m.d-m.b*m.c))||1;
+      const dashed=!!(cs.strokeDasharray && cs.strokeDasharray!=='none' && /\d/.test(cs.strokeDasharray));
+      const d={type:'s', w:(parseFloat(cs.strokeWidth)||1)*sc, rgb, dashed, items:[]};
+      for(const poly of polysDeForme(el)){
+        d.items.push(null);
+        let prev=null;
+        for(const [ux,uy] of poly){
+          const px=m.a*ux+m.c*uy+m.e, py=m.b*ux+m.d*uy+m.f;
+          if(prev) d.items.push([prev[0],prev[1],px,py]);
+          prev=[px,py];
+        }
+      }
+      let n=0; for(const x of d.items) if(x) n++;
+      if(n){ cpt.seg+=n; drawings.push(d); }
+    }
+    for(const el of live.querySelectorAll('text,tspan')){
+      if(el.closest(HORS_RENDU)) continue;
+      if(el.querySelector('tspan')) continue;              // on ne lit que les feuilles
+      const cs=getComputedStyle(el);
+      if(cs.display==='none'||cs.visibility==='hidden') continue;
+      const brut=(el.textContent||'').replace(/\s+/g,' ').trim();
+      if(!brut) continue;
+      let nchars=0;
+      try{ nchars=el.getNumberOfChars(); }catch(e){ continue; }
+      if(nchars!==brut.length) continue;                   // indices non fiables
+      const m0=el.getScreenCTM(); if(!m0) continue;
+      const m=inv.multiply(m0);
+      if(Math.abs(m.b)>0.01) continue;                     // texte tourné : ignoré
+      let i=0;
+      for(const mot of brut.split(' ')){
+        if(!mot){ i++; continue; }
+        let x0=null,y0=null,x1=null,y1=null;
+        for(let k=0;k<mot.length;k++){
+          let r=null;
+          try{ r=el.getExtentOfChar(i+k); }catch(e){ r=null; }
+          if(!r) continue;
+          const a=[r.x,r.y], b=[r.x+r.width, r.y+r.height];
+          if(x0===null){ x0=a[0]; y0=a[1]; x1=b[0]; y1=b[1]; }
+          else { x0=Math.min(x0,a[0]); y0=Math.min(y0,a[1]);
+                 x1=Math.max(x1,b[0]); y1=Math.max(y1,b[1]); }
+        }
+        i+=mot.length+1;
+        if(x0===null) continue;
+        const cx=m.a*(x0+x1)/2+m.c*(y0+y1)/2+m.e;
+        const cy=m.b*(x0+x1)/2+m.d*(y0+y1)/2+m.f;
+        const gx=m.a*x0+m.c*y0+m.e, gy=m.b*x0+m.d*y0+m.f;
+        words.push({x:cx, y:cy, x0:gx, y0:gy, s:mot});
+      }
+    }
+    return {drawings, words, pw, ph, diag:diagnostic(cpt, words.length)};
+  } finally { host.remove(); }
+}
+
+// Fond de plan d'un SVG : le navigateur le rastérise via <img>, puis on recadre.
+async function fondSVG(texte, clipArr, sc){
+  const {host, live, pw, ph}=svgHorsEcran(texte);
+  let ser;
+  try{ ser=new XMLSerializer().serializeToString(live); }
+  finally{ host.remove(); }
+  sc=sc||150/72;
+  const im=await chargerImage('data:image/svg+xml;charset=utf-8,'+encodeURIComponent(ser));
+  const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(pw*sc)); c.height=Math.max(1,Math.round(ph*sc));
+  const g=c.getContext('2d');
+  g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height);
+  g.drawImage(im,0,0,c.width,c.height);
+  return recadrer(c, clipArr, sc);
+}
+
+// =================== lecture DXF ===================
+// Le DXF n'a pas d'épaisseur de trait exploitable : ce sont les CALQUES qui
+// disent ce qu'est un mur. On développe d'abord la géométrie (blocs compris),
+// on présente les calques à l'utilisateur, puis on fabrique les tracés en
+// donnant aux calques « mur » une largeur qui passe le seuil du moteur.
+
+const DXF_MUR=/(mur|cloison|paroi|wall|partition|maconn|beton|structure|porteur)/;
+const DXF_PORTE=/(porte|door|fenetre|window|baie|vitr|glaz|menuis)/;
+const DXF_BRUIT=/(cotation|^cote|_cote|dim|hatch|hachur|^axe|_axe|axis|text|mobil|furnit|equip|mep|defpoints|elec|plomb|cvc|hvac|arbre|veget|nomencl|cartouche|titleblock|repere|symbol|trame|grid|quadrill|cadre|legend)/;
+
+// mètres par unité de dessin, d'après $INSUNITS
+const DXF_UNITES={1:0.0254, 2:0.3048, 4:0.001, 5:0.01, 6:1, 8:2.54e-5, 9:1e-6,
+                  10:0.9144, 11:1e-10, 12:1e-9, 13:1e-6, 14:0.1, 15:10, 16:100};
+const DXF_NOMS={mm:0.001, cm:0.01, m:1, 'in':0.0254, ft:0.3048};
+
+// palette ACI réduite : les 9 premières couleurs, le reste en gris foncé
+const ACI={1:'#d33', 2:'#cc0', 3:'#2a2', 4:'#0aa', 5:'#36c', 6:'#c3c',
+           7:'#333', 8:'#888', 9:'#bbb'};
+function couleurACI(i){
+  if(i==null) return '#333';
+  if(ACI[i]) return ACI[i];
+  if(i>=250&&i<=255) return ['#333','#4d4d4d','#696969','#848484','#9f9f9f','#bfbfbf'][i-250];
+  return '#333';
+}
+
+function normCalque(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+}
+
+// --- découpage en couples (code, valeur) ---
+function pairesDXF(texte){
+  if(texte.slice(0,18)==='AutoCAD Binary DXF')
+    throw new Error('DXF binaire : réexportez en DXF ASCII');
+  const l=texte.split(/\r\n|\r|\n/);
+  const out=[];
+  // couples stricts (code, valeur) ; une ligne qui n'est pas un code entier
+  // est une ligne parasite sur laquelle on se recale, sans tout désaligner
+  for(let i=0;i+1<l.length;){
+    const t=l[i].trim();
+    if(!/^-?\d+$/.test(t)){ i++; continue; }
+    out.push([parseInt(t,10), l[i+1]]);
+    i+=2;
+  }
+  if(!out.length) throw new Error('DXF vide ou illisible');
+  return out;
+}
+
+function entitesDXF(pr, i0, i1){
+  const ents=[]; let cur=null;
+  for(let i=i0;i<i1;i++){
+    const c=pr[i][0], v=pr[i][1];
+    if(c===0){ cur={t:v, g:{}}; ents.push(cur); continue; }
+    if(!cur) continue;
+    (cur.g[c]=cur.g[c]||[]).push(v);
+  }
+  return ents;
+}
+const gN=(e,c,d)=>{ const a=e.g[c]; if(!a) return d; const v=parseFloat(a[0]); return isFinite(v)?v:d; };
+const gS=(e,c,d)=>{ const a=e.g[c]; return a?a[0]:d; };
+const gA=(e,c)=>(e.g[c]||[]).map(parseFloat);
+
+// --- transformations planes : [a,b,c,d,e,f] ---
+const TF_ID=[1,0,0,1,0,0];
+const tfMul=(m,n)=>[m[0]*n[0]+m[2]*n[1], m[1]*n[0]+m[3]*n[1],
+                    m[0]*n[2]+m[2]*n[3], m[1]*n[2]+m[3]*n[3],
+                    m[0]*n[4]+m[2]*n[5]+m[4], m[1]*n[4]+m[3]*n[5]+m[5]];
+const tfAp=(m,x,y)=>[m[0]*x+m[2]*y+m[4], m[1]*x+m[3]*y+m[5]];
+const tfEch=m=>Math.sqrt(Math.abs(m[0]*m[3]-m[1]*m[2]))||1;
+
+function texteMTEXT(s){
+  return String(s)
+    .replace(/\\P/g,'\n').replace(/\\~/g,' ')
+    .replace(/\\S([^;]*);/g,(m,a)=>a.replace(/[\^#/]/g,' '))
+    .replace(/\\[ACcFfHQTWpt][^;\\]*;/g,'')
+    .replace(/\\[LlOoKkNX]/g,'')
+    .replace(/[{}]/g,'')
+    .replace(/\\\\/g,'\\');
+}
+
+// Développe une liste d'entités en primitives brutes, en coordonnées DXF.
+function devDXF(ents, blocs, tf, layHerite, out, prof){
+  if(prof>8) return;
+  const PAS=5*Math.PI/180;                       // pas d'approximation des arcs
+  for(let i=0;i<ents.length;i++){
+    const e=ents[i], t=e.t;
+    let lay=gS(e,8,'0');
+    if(lay==='0' && layHerite) lay=layHerite;
+    const col=e.g[62]?Math.abs(parseInt(e.g[62][0],10)):null;
+    const lt=gS(e,6,null);
+    const poly=pts=>{ if(pts.length>1) out.geo.push({lay, col, lt, pts}); };
+    const arc=(cx,cy,r,a0,a1)=>{
+      if(!(r>0)) return;
+      let span=a1-a0; while(span<=0) span+=2*Math.PI;
+      const n=Math.max(4, Math.min(180, Math.ceil(span/PAS)));
+      const pts=[];
+      for(let k=0;k<=n;k++){ const a=a0+span*k/n;
+        pts.push(tfAp(tf, cx+r*Math.cos(a), cy+r*Math.sin(a))); }
+      poly(pts);
+    };
+    if(t==='LINE'){
+      poly([tfAp(tf,gN(e,10,0),gN(e,20,0)), tfAp(tf,gN(e,11,0),gN(e,21,0))]);
+    }
+    else if(t==='LWPOLYLINE'){
+      const xs=gA(e,10), ys=gA(e,20), n=Math.min(xs.length,ys.length);
+      const pts=[];
+      for(let k=0;k<n;k++) pts.push(tfAp(tf,xs[k],ys[k]));
+      if((gN(e,70,0)&1) && n>2) pts.push(pts[0].slice());
+      poly(pts);
+    }
+    else if(t==='POLYLINE'){
+      const ferme=(gN(e,70,0)&1);
+      const pts=[]; let j=i+1;
+      for(; j<ents.length && ents[j].t==='VERTEX'; j++)
+        pts.push(tfAp(tf, gN(ents[j],10,0), gN(ents[j],20,0)));
+      if(j<ents.length && ents[j].t==='SEQEND') j++;
+      i=j-1;
+      if(ferme && pts.length>2) pts.push(pts[0].slice());
+      poly(pts);
+    }
+    else if(t==='ARC'){
+      arc(gN(e,10,0), gN(e,20,0), gN(e,40,0),
+          gN(e,50,0)*Math.PI/180, gN(e,51,0)*Math.PI/180);
+    }
+    else if(t==='CIRCLE'){
+      arc(gN(e,10,0), gN(e,20,0), gN(e,40,0), 0, 2*Math.PI);
+    }
+    else if(t==='ELLIPSE'){
+      const cx=gN(e,10,0), cy=gN(e,20,0), mx=gN(e,11,0), my=gN(e,21,0);
+      const ratio=gN(e,40,1), a0=gN(e,41,0), a1=gN(e,42,2*Math.PI);
+      const ra=Math.hypot(mx,my), rb=ra*ratio, rot=Math.atan2(my,mx);
+      let span=a1-a0; while(span<=0) span+=2*Math.PI;
+      const n=Math.max(8, Math.min(180, Math.ceil(span/PAS)));
+      const pts=[];
+      for(let k=0;k<=n;k++){
+        const a=a0+span*k/n, ux=ra*Math.cos(a), uy=rb*Math.sin(a);
+        pts.push(tfAp(tf, cx+ux*Math.cos(rot)-uy*Math.sin(rot),
+                          cy+ux*Math.sin(rot)+uy*Math.cos(rot)));
+      }
+      poly(pts);
+    }
+    else if(t==='SOLID'||t==='3DFACE'){
+      const q=[[10,20],[11,21],[13,23],[12,22]]
+        .map(([a,b])=>tfAp(tf,gN(e,a,NaN),gN(e,b,NaN)))
+        .filter(p=>isFinite(p[0])&&isFinite(p[1]));
+      if(q.length>2){ q.push(q[0].slice()); poly(q); }
+    }
+    else if(t==='TEXT'||t==='ATTRIB'){
+      const s=(gS(e,1,'')||'').trim();
+      if(!s) continue;
+      let jh=gN(e,72,0); const jv=gN(e,73,0);
+      jh = jh===4 ? 1 : (jh>2 ? 0 : jh);          // aligné / ajusté : traités en gauche
+      const ax=(jh||jv)&&e.g[11]?gN(e,11,0):gN(e,10,0);
+      const ay=(jh||jv)&&e.g[21]?gN(e,21,0):gN(e,20,0);
+      out.txt.push({lay, col, s, x:ax, y:ay, h:gN(e,40,2.5)||2.5,
+                    rot:gN(e,50,0), jh, jv, tf, sc:tfEch(tf)});
+    }
+    else if(t==='MTEXT'){
+      const s=texteMTEXT(((e.g[3]||[]).join('')+(gS(e,1,'')||''))).trim();
+      if(!s) continue;
+      const at=gN(e,71,1);
+      out.txt.push({lay, col, s, x:gN(e,10,0), y:gN(e,20,0), h:gN(e,40,2.5)||2.5,
+                    rot:gN(e,50,0), jh:[0,1,2][(at-1)%3], jv:[3,2,1][Math.floor((at-1)/3)],
+                    tf, sc:tfEch(tf), multi:true});
+    }
+    else if(t==='INSERT'){
+      const nom=gS(e,2,'');
+      const b=blocs[nom];
+      if(b){
+        const sx=gN(e,41,1)||1, sy=gN(e,42,1)||1, rot=gN(e,50,0)*Math.PI/180;
+        const px=gN(e,10,0), py=gN(e,20,0);
+        const cols=Math.max(1,Math.min(200,gN(e,70,1)||1)), rows=Math.max(1,Math.min(200,gN(e,71,1)||1));
+        const dc=gN(e,44,0), dr=gN(e,45,0);
+        const co=Math.cos(rot), si=Math.sin(rot);
+        for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+          const ox=px+c*dc*co-r*dr*si, oy=py+c*dc*si+r*dr*co;
+          const loc=[co*sx, si*sx, -si*sy, co*sy, ox, oy];
+          const dec=[1,0,0,1,-b.bx,-b.by];
+          devDXF(b.ents, blocs, tfMul(tf, tfMul(loc,dec)), lay, out, prof+1);
+        }
+      }
+      // les ATTRIB qui suivent sont déjà en coordonnées absolues
+    }
+    // DIMENSION, HATCH, LEADER, MLINE, VIEWPORT : ignorés
+  }
+}
+
+// Lecture complète d'un DXF : géométrie développée + inventaire des calques.
+function scanDXF(texte){
+  const pr=pairesDXF(texte);
+  const header={}, calques={}, blocs={};
+  let section=null, secD=0;
+  const bornes=[];
+  for(let i=0;i<pr.length;i++){
+    const [c,v]=pr[i];
+    if(c===0 && v==='SECTION'){ section=(pr[i+1]&&pr[i+1][0]===2)?pr[i+1][1]:null; secD=i+2; }
+    else if(c===0 && v==='ENDSEC'){ if(section) bornes.push([section,secD,i]); section=null; }
+  }
+  for(const [nom,a,b] of bornes){
+    if(nom==='HEADER'){
+      for(let i=a;i<b;i++) if(pr[i][0]===9 && pr[i+1]) header[pr[i][1]]=pr[i+1][1];
+    }
+    else if(nom==='TABLES'){
+      for(const e of entitesDXF(pr,a,b)) if(e.t==='LAYER'){
+        const n=gS(e,2,''); if(!n) continue;
+        calques[n]={col:Math.abs(gN(e,62,7)), lt:gS(e,6,'CONTINUOUS'), lw:gN(e,370,-1)};
+      }
+    }
+    else if(nom==='BLOCKS'){
+      const ents=entitesDXF(pr,a,b);
+      let cur=null;
+      for(const e of ents){
+        if(e.t==='BLOCK'){ cur={nom:gS(e,2,''), bx:gN(e,10,0), by:gN(e,20,0), ents:[]};
+                           if(cur.nom) blocs[cur.nom]=cur; continue; }
+        if(e.t==='ENDBLK'){ cur=null; continue; }
+        if(cur) cur.ents.push(e);
+      }
+    }
+  }
+  const secEnt=bornes.find(b=>b[0]==='ENTITIES');
+  if(!secEnt) throw new Error('DXF sans section ENTITIES');
+  const out={geo:[], txt:[]};
+  devDXF(entitesDXF(pr,secEnt[1],secEnt[2]), blocs, TF_ID, null, out, 0);
+  if(!out.geo.length && !out.txt.length) throw new Error('aucune entité lisible dans ce DXF');
+
+  // étendue réelle du dessin
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const g of out.geo) for(const p of g.pts){
+    if(!isFinite(p[0])||!isFinite(p[1])) continue;
+    if(p[0]<x0)x0=p[0]; if(p[0]>x1)x1=p[0];
+    if(p[1]<y0)y0=p[1]; if(p[1]>y1)y1=p[1];
+  }
+  if(!isFinite(x0)) throw new Error('géométrie DXF sans coordonnées exploitables');
+
+  // unités : $INSUNITS, sinon l'ordre de grandeur de l'étendue
+  const iu=parseInt(header['$INSUNITS'],10);
+  let mpu=DXF_UNITES[iu]||null, unitesAuto;
+  if(mpu) unitesAuto=null;
+  else { const d=Math.max(x1-x0,y1-y0);
+         mpu = d>1000 ? 0.001 : (d>200 ? 0.01 : 1);
+         unitesAuto = mpu===0.001?'mm':(mpu===0.01?'cm':'m'); }
+
+  // inventaire des calques : longueur cumulée, pour trier du plus porteur au moins
+  const stats={};
+  for(const g of out.geo){
+    const st=stats[g.lay]||(stats[g.lay]={nom:g.lay, n:0, L:0, txt:0});
+    for(let k=1;k<g.pts.length;k++){
+      st.n++; st.L+=Math.hypot(g.pts[k][0]-g.pts[k-1][0], g.pts[k][1]-g.pts[k-1][1]);
+    }
+  }
+  for(const t of out.txt){
+    const st=stats[t.lay]||(stats[t.lay]={nom:t.lay, n:0, L:0, txt:0});
+    st.txt++;
+  }
+  const liste=Object.values(stats).sort((a,b)=>b.L-a.L);
+  return {geo:out.geo, txt:out.txt, calques, header, bbox:[x0,y0,x1,y1],
+          mpu, unitesAuto, liste};
+}
+
+// Répartition par défaut des calques : mur / porte / ignoré.
+function choixCalques(M){
+  const ch={};
+  let aMur=false;
+  for(const st of M.liste){
+    const n=normCalque(st.nom);
+    let r='ignore';
+    if(DXF_MUR.test(n) && !DXF_BRUIT.test(n)){ r='mur'; aMur=true; }
+    else if(DXF_PORTE.test(n)) r='porte';
+    ch[st.nom]=r;
+  }
+  if(!aMur){
+    // pas de nom parlant : se rabattre sur l'épaisseur de trait du calque
+    for(const st of M.liste){
+      const c=M.calques[st.nom];
+      if(c && c.lw>=30 && !DXF_BRUIT.test(normCalque(st.nom))){ ch[st.nom]='mur'; aMur=true; }
+    }
+  }
+  return {ch, aMur};
+}
+
+// Fabrique les tracés du moteur. Les calques « mur » reçoivent une largeur très
+// au-dessus du seuil, les portes une largeur intermédiaire, le reste presque
+// rien : c'est ainsi que seuilMurs() sépare proprement les trois familles.
+const DXF_W={mur:3, porte:0.3, ignore:0.01};
+const PT_PAR_M=72/25.4*1000/100;                 // repère du moteur : 1/100
+
+function geoDXF(M, ch, unites){
+  const mpu=(unites&&DXF_NOMS[unites])||M.mpu;
+  const k=PT_PAR_M*mpu;
+  const [x0,y0,,y1]=M.bbox;
+  const marge=20;
+  const X=x=>(x-x0)*k+marge, Y=y=>(y1-y)*k+marge;
+  const pw=(M.bbox[2]-x0)*k+2*marge, ph=(y1-y0)*k+2*marge;
+  const drawings=[], traces=[];
+  const cpt={seg:0, aplat:0, couvImg:0};
+  for(const g of M.geo){
+    const r=ch[g.lay]||'ignore';
+    const lt=g.lt||(M.calques[g.lay]||{}).lt||'CONTINUOUS';
+    const dashed=!!(lt && !/^(CONTINUOUS|BYLAYER|BYBLOCK)$/i.test(lt));
+    const col=couleurACI(g.col!=null?g.col:(M.calques[g.lay]||{}).col);
+    const items=[];
+    let prev=null;
+    for(const p of g.pts){
+      const px=X(p[0]), py=Y(p[1]);
+      if(!isFinite(px)||!isFinite(py)){ prev=null; items.push(null); continue; }
+      if(prev) items.push([prev[0],prev[1],px,py]);
+      prev=[px,py];
+    }
+    let n=0; for(const x of items) if(x) n++;
+    if(!n) continue;
+    traces.push({items, col, mur:r==='mur'});
+    if(r==='ignore'&&dashed) continue;            // bruit en pointillé : inutile au moteur
+    cpt.seg+=n;
+    drawings.push({type:'s', w:DXF_W[r], rgb:[0,0,0], dashed, items});
+  }
+  // textes : un mot par entrée, position approchée d'après la hauteur de caractère
+  const words=[], textes=[];
+  for(const t of M.txt){
+    const [ax,ay]=tfAp(t.tf, t.x, t.y);
+    const lignes=String(t.s).split('\n').filter(s=>s.trim());
+    if(!lignes.length) continue;
+    const h=t.h*(t.sc||1)*k, rot=t.rot||0;
+    textes.push({x:X(ax), y:Y(ay), h, rot, lignes, jh:t.jh|0, jv:t.jv|0,
+                 col:couleurACI(t.col!=null?t.col:(M.calques[t.lay]||{}).col)});
+    if(Math.abs(rot%180)>1) continue;             // texte tourné : non rattaché
+    lignes.forEach((ligne,li)=>{
+      const larg=0.62*h*ligne.length;
+      let gx=X(ax);
+      if(t.jh===1) gx-=larg/2; else if(t.jh===2) gx-=larg;
+      // gy vise le centre du glyphe, comme les mots venus du PDF
+      let gy=Y(ay)+li*h*1.25;
+      if(t.jv===3) gy+=h*0.35;                    // ancré en haut
+      else if(t.jv!==2) gy-=h*0.35;               // ligne de base ou bas
+      let off=0;
+      for(const mot of ligne.split(/\s+/)){
+        if(!mot){ off++; continue; }
+        const idx=ligne.indexOf(mot, off); off=idx+mot.length;
+        const wx=gx+0.62*h*(idx+mot.length/2);
+        words.push({x:wx, y:gy, x0:wx-0.62*h*mot.length/2, y0:gy-h/2, s:mot});
+      }
+    });
+  }
+  return {drawings, words, textes, traces, pw, ph, k, mpu, murMin:0.45,
+          diag:diagnostic(cpt, words.length)};
+}
+
+// Fond de plan d'un DXF : on redessine nous-mêmes, pdf.js n'étant d'aucun secours.
+function fondDXF(G, clipArr, sc){
+  sc=sc||150/72;
+  const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(G.pw*sc)); c.height=Math.max(1,Math.round(G.ph*sc));
+  const g=c.getContext('2d');
+  g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height);
+  g.lineCap='round'; g.lineJoin='round';
+  for(const tr of G.traces){
+    g.strokeStyle=tr.col; g.lineWidth=(tr.mur?1.1:0.4)*sc;
+    g.beginPath();
+    let prev=null;
+    for(const it of tr.items){
+      if(!it){ prev=null; continue; }
+      if(!prev || prev[0]!==it[0] || prev[1]!==it[1]) g.moveTo(it[0]*sc, it[1]*sc);
+      g.lineTo(it[2]*sc, it[3]*sc);
+      prev=[it[2],it[3]];
+    }
+    g.stroke();
+  }
+  g.textBaseline='alphabetic';
+  for(const t of G.textes){
+    const px=Math.max(1, t.h*sc);
+    if(px<4) continue;
+    g.save();
+    g.translate(t.x*sc, t.y*sc);
+    if(t.rot) g.rotate(-t.rot*Math.PI/180);
+    g.fillStyle=t.col; g.font=px+'px sans-serif';
+    g.textAlign=t.jh===1?'center':(t.jh===2?'right':'left');
+    t.lignes.forEach((ligne,li)=>{
+      let dy=li*px*1.25;
+      if(t.jv===2) dy+=px*0.35; else if(t.jv===3) dy+=px*0.85;
+      g.fillText(ligne, 0, dy);
+    });
+    g.restore();
+  }
+  return recadrer(c, clipArr, sc);
+}
+
+return {analyser, extraire, rendreFond, diagnostiquerPDF, diagnostic,
+        lireSVG, fondSVG, scanDXF, choixCalques, geoDXF, fondDXF,
+        fondImage, chargerImage, recadrer};
 })();
 
 // ================== accueil ==================
-let pdfDoc=null, pdfNom=null, pageChoisie=0;
+// Source de plan unifiée. Quatre entrées — PDF vectoriel, SVG, DXF, image —
+// derrière une même interface : diagnostiquer une page, en extraire la
+// géométrie, en rendre le fond. Une image n'est pas analysable : elle ne sert
+// que de fond à relever à la main.
+let SRC=null, pdfDoc=null, pdfNom=null, pageChoisie=0;
+
 const acc={
   drop:document.getElementById('drop'), fpdf:document.getElementById('fpdf'),
   vig:document.getElementById('vignettes'), params:document.getElementById('acc_params'),
   status:document.getElementById('acc_status')
 };
 function statut(t, err){ acc.status.textContent=t; acc.status.className=err?'err':''; }
+
+// --- ce que le diagnostic promet, en clair ---
+const DIAG_LIB={vectoriel:['Vectoriel','ok'], sansTexte:['Sans texte','wrn'],
+                image:['Image','err'], vide:['Sans plan','err']};
+const DIAG_TXT={
+  vectoriel:'Tracés et libellés lisibles : analyse complète.',
+  sansTexte:'Tracés lisibles mais aucun libellé exploitable — textes vectorisés à '+
+    'l’export, ou police sans table Unicode. Les cloisons et les pièces seront '+
+    'détectées ; les noms et numéros de locaux seront à saisir à la main.',
+  image:'Cette page est une image : il n’y a aucun tracé à extraire. Vous pouvez '+
+    'la prendre comme fond et tracer les cloisons à la main.',
+  vide:'Presque aucun tracé ici — page de garde, nomenclature ou cartouche seul ?'};
+
+function badgeDiag(d){
+  const [lib,cls]=DIAG_LIB[d.niveau]||['?','wrn'];
+  return '<span class="dg '+cls+'">'+lib+'</span>';
+}
+
+// --- sources ---
+function sourcePDF(doc, nom){
+  const pages={};
+  const page=i=>pages[i]||(pages[i]=doc.getPage(i+1));
+  return {
+    kind:'pdf', nom, nPages:doc.numPages, analysable:true, echelleLibre:true, doc,
+    async dims(i){ const vp=(await page(i)).getViewport({scale:1});
+                   return {pw:vp.width, ph:vp.height}; },
+    async vignette(i, cv){ const p=await page(i);
+      const vp0=p.getViewport({scale:1});
+      const vp=p.getViewport({scale:cv.width/vp0.width});
+      cv.height=Math.round(vp.height);
+      await p.render({canvasContext:cv.getContext('2d'), viewport:vp}).promise; },
+    async diag(i){ return MOTEUR.diagnostiquerPDF(await page(i)); },
+    async extraire(i){ return MOTEUR.extraire(await page(i)); },
+    async fond(i, clip){ return MOTEUR.rendreFond(await page(i), clip); }
+  };
+}
+
+function sourceSVG(texte, nom){
+  let ex=null;
+  const lire=()=>ex||(ex=MOTEUR.lireSVG(texte));
+  return {
+    kind:'svg', nom, nPages:1, analysable:true, echelleLibre:true, texte,
+    async dims(){ const e=lire(); return {pw:e.pw, ph:e.ph}; },
+    async vignette(i, cv){ const e=lire();
+      cv.height=Math.max(1,Math.round(cv.width*e.ph/e.pw));
+      const im=await MOTEUR.chargerImage(
+        await MOTEUR.fondSVG(texte,[0,0,e.pw,e.ph], cv.width/e.pw));
+      cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height); },
+    async diag(){ return lire().diag; },
+    async extraire(){ return lire(); },
+    async fond(i, clip){ return MOTEUR.fondSVG(texte, clip); }
+  };
+}
+
+function sourceDXF(M, nom){
+  const d=MOTEUR.choixCalques(M);
+  let G=null;
+  return {
+    kind:'dxf', nom, nPages:1, analysable:true, echelleLibre:false, M,
+    choix:d.ch, aMur:d.aMur, unites:null,
+    geo(){ return G||(G=MOTEUR.geoDXF(M, this.choix, this.unites)); },
+    invalider(){ G=null; },
+    async dims(){ const g=this.geo(); return {pw:g.pw, ph:g.ph}; },
+    async vignette(i, cv){ const g=this.geo();
+      cv.height=Math.max(1,Math.round(cv.width*g.ph/g.pw));
+      const im=await MOTEUR.chargerImage(
+        MOTEUR.fondDXF(g,[0,0,g.pw,g.ph], Math.max(cv.width/g.pw, 0.12)));
+      cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height); },
+    async diag(){ return this.geo().diag; },
+    async extraire(){ return this.geo(); },
+    async fond(i, clip){ return MOTEUR.fondDXF(this.geo(), clip); }
+  };
+}
+
+function sourceImage(fond, nom){
+  return {
+    kind:'image', nom, nPages:1, analysable:false, echelleLibre:true, fond,
+    async dims(){ return {pw:fond.w, ph:fond.h}; },
+    async vignette(i, cv){ const im=await MOTEUR.chargerImage(fond.url);
+      cv.height=Math.max(1,Math.round(cv.width*fond.h/fond.w));
+      cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height); },
+    async diag(){ return {niveau:'image', seg:0, nMots:0, aplat:0, couvImg:1, note:null}; },
+    async extraire(){ throw new Error("une image ne s'analyse pas"); },
+    async fond(){ return fond.url; }
+  };
+}
+
+// --- dépôt de fichier ---
 acc.drop.onclick=()=>acc.fpdf.click();
 acc.drop.ondragover=e=>{ e.preventDefault(); acc.drop.classList.add('hov'); };
 acc.drop.ondragleave=()=>acc.drop.classList.remove('hov');
 acc.drop.ondrop=e=>{
   e.preventDefault(); acc.drop.classList.remove('hov');
   const f=e.dataTransfer.files[0];
-  if(f) chargerPDF(f);
+  if(f) chargerPlan(f);
 };
-acc.fpdf.onchange=e=>{ if(e.target.files[0]) chargerPDF(e.target.files[0]); };
+acc.fpdf.onchange=e=>{ if(e.target.files[0]) chargerPlan(e.target.files[0]); };
 const drop2=document.getElementById('drop2'), fprj=document.getElementById('fprj');
 drop2.onclick=()=>fprj.click();
 drop2.ondragover=e=>{ e.preventDefault(); drop2.classList.add('hov'); };
@@ -1774,7 +2604,7 @@ async function chargerProjet(f){
       if(!data.rooms) throw new Error('sauvegarde invalide');
       const mb=tx.match(/id="bg"[^>]*src="(data:image\/jpeg;base64,[^"]+)"/);
       if(!mb) throw new Error('fond de plan introuvable dans le fichier');
-      pdfDoc=null;
+      SRC=null; pdfDoc=null;
       ouvrirEditeur(data, mb[1]);
     } else {
       statut('Projet V2 : lecture…');
@@ -1784,23 +2614,48 @@ async function chargerProjet(f){
       statut('Re-rendu du plan depuis le PDF embarqué…');
       pdfDoc=await pdfjsLib.getDocument({data:bin}).promise;
       pdfNom=j.nom||'projet';
+      SRC=sourcePDF(pdfDoc, pdfNom);
       pageChoisie=j.page_no||0;
-      const page=await pdfDoc.getPage(pageChoisie+1);
       const payload=j.payload;
       payload.sheet=j.nom; payload.echelle=j.echelle||100; payload.finesse=j.finesse??4;
       payload.etat_client=j.etat_client||null;
-      const bg=await MOTEUR.rendreFond(page, payload.clip);
+      const bg=await SRC.fond(pageChoisie, payload.clip);
       ouvrirEditeur(payload, bg);
     }
     statut('');
   }catch(e){ statut('Échec ouverture projet : '+(e.message||e), true); }
 }
 
-async function chargerPDF(f){
+const EXT_IMG=/\.(png|jpe?g|webp|gif|bmp)$/i;
+function lireFichier(f){
+  return new Promise((ok,ko)=>{
+    const r=new FileReader();
+    r.onload=()=>ok(r.result); r.onerror=()=>ko(new Error('lecture impossible'));
+    r.readAsDataURL(f);
+  });
+}
+
+async function chargerPlan(f){
   try{
-    statut('Lecture du PDF…');
-    const buf=await f.arrayBuffer();
-    pdfDoc=await pdfjsLib.getDocument({data:buf}).promise;
+    const n=f.name.toLowerCase();
+    pdfDoc=null; SRC=null; pageChoisie=0;
+    if(n.endsWith('.pdf')){
+      statut('Lecture du PDF…');
+      pdfDoc=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;
+      SRC=sourcePDF(pdfDoc, f.name);
+    } else if(n.endsWith('.svg')){
+      statut('Lecture du SVG…');
+      SRC=sourceSVG(await f.text(), f.name);
+    } else if(n.endsWith('.dxf')){
+      statut('Lecture du DXF…');
+      const M=MOTEUR.scanDXF(await f.text());
+      SRC=sourceDXF(M, f.name);
+    } else if(EXT_IMG.test(n)){
+      statut("Lecture de l'image…");
+      SRC=sourceImage(await MOTEUR.fondImage(await lireFichier(f)), f.name);
+    } else {
+      throw new Error('format non pris en charge — PDF, SVG, DXF, PNG ou JPG');
+    }
     pdfNom=f.name;
     document.getElementById('drop').style.display='none';
     document.getElementById('pdfinfo').style.display='flex';
@@ -1808,54 +2663,148 @@ async function chargerPDF(f){
     document.getElementById('step1').classList.add('done');
     document.getElementById('step1').innerHTML=ICO_CHECK;
     document.getElementById('pdfnom').textContent=f.name;
+    const genre={pdf:'PDF', svg:'SVG', dxf:'DXF', image:'Image'}[SRC.kind];
+    const taille = f.size>=1e6 ? (f.size/1e6).toFixed(1).replace('.',',')+' Mo'
+                                : Math.max(1,Math.round(f.size/1024))+' Ko';
     document.getElementById('pdfmeta').textContent=
-      (f.size/1e6).toFixed(1).replace('.',',')+' Mo · '+pdfDoc.numPages+
-      ' page'+(pdfDoc.numPages>1?'s':'');
-    await montrerVignettes();
-    document.getElementById('card_page').style.display='';
-    acc.params.style.display='';
-    statut('Choisissez la page — un niveau par page — puis lancez l\'analyse.');
-  }catch(e){ statut('Échec : '+e.message, true); }
+      genre+' · '+taille+
+      (SRC.kind==='pdf' ? ' · '+SRC.nPages+' page'+(SRC.nPages>1?'s':'') : '');
+    await montrerSource();
+  }catch(e){ console.error(e); statut('Échec : '+(e.message||e), true); }
 }
+
+// --- vignettes + diagnostic ---
+let DIAGS=[];
+async function montrerSource(){
+  const estDXF=SRC.kind==='dxf';
+  document.getElementById('card_page').style.display='';
+  document.getElementById('pgttl').textContent=
+    SRC.kind==='pdf' ? 'Page à analyser' : 'Aperçu du plan';
+  document.getElementById('pgsub').textContent=
+    SRC.kind==='pdf' ? '— un niveau par page' : '';
+  document.getElementById('card_dxf').style.display=estDXF?'':'none';
+  acc.params.style.display='';
+  document.getElementById('echelle').disabled=!SRC.echelleLibre;
+  document.getElementById('ech_note').textContent=SRC.echelleLibre
+    ? 'Ou calibrez à l’écran en cliquant deux points d’une cote connue.'
+    : 'Échelle donnée par les unités du DXF : rien à saisir ici.';
+  if(estDXF) majCalquesDXF();
+  DIAGS=new Array(SRC.nPages).fill(null);
+  await montrerVignettes();
+  majPageChoisie();
+}
+
 async function montrerVignettes(){
   acc.vig.innerHTML='';
-  pageChoisie=0;
-  for(let i=1;i<=pdfDoc.numPages;i++){
+  const cases=[];
+  for(let i=0;i<SRC.nPages;i++){
     const div=document.createElement('div');
-    div.className='pg'+(i===1?' on':'');
-    div.dataset.p=i-1;
-    div.innerHTML='<div style="height:56px;background:#f2f3f5;border-radius:2px"></div>'+
-      '<div style="margin-top:4px">Page '+i+'</div>';
+    div.className='pg'+(i===0?' on':'');
+    div.dataset.p=i;
+    div.innerHTML='<div class="vph"></div><div class="pgl">'+
+      (SRC.kind==='pdf'?'Page '+(i+1):'Plan')+'</div>';
     div.onclick=()=>{
-      pageChoisie=+div.dataset.p;
+      pageChoisie=i;
       for(const d of acc.vig.children) d.classList.toggle('on', d===div);
       majPageChoisie();
     };
     acc.vig.appendChild(div);
+    cases.push(div);
   }
-  majPageChoisie();
-  for(let i=1;i<=pdfDoc.numPages;i++){
-    const page=await pdfDoc.getPage(i);
-    const vp0=page.getViewport({scale:1});
-    const z=160/vp0.width;
-    const vp=page.getViewport({scale:z});
-    const c=document.createElement('canvas');
-    c.width=Math.round(vp.width); c.height=Math.round(vp.height);
-    await page.render({canvasContext:c.getContext('2d'), viewport:vp}).promise;
-    const div=acc.vig.children[i-1];
-    div.innerHTML='';
-    div.appendChild(c);
-    const t=document.createElement('div');
-    t.style.marginTop='4px'; t.textContent='Page '+i;
-    div.appendChild(t);
+  for(let i=0;i<SRC.nPages;i++){
+    const cv=document.createElement('canvas');
+    cv.width=160; cv.height=90;
+    try{ await SRC.vignette(i, cv); }catch(e){ console.warn(e); }
+    const div=cases[i];
+    const ph=div.querySelector('.vph');
+    if(ph) div.replaceChild(cv, ph);
+    let d=null;
+    try{ d=await SRC.diag(i); }catch(e){ console.warn(e); }
+    DIAGS[i]=d;
+    if(d) div.insertAdjacentHTML('beforeend', badgeDiag(d));
+    if(i===pageChoisie) majPageChoisie();
   }
 }
-// libelles de l'accueil qui suivent la page choisie et la finesse
+
+// Le libellé du bouton, l'explication du diagnostic et l'accès au tracé manuel
+// suivent la page choisie.
 function majPageChoisie(){
   const n=pageChoisie+1;
-  const e=document.getElementById('pagesel'); if(e) e.textContent='Page '+n+' sélectionnée';
-  const b=document.getElementById('btnanalyser_txt'); if(b) b.textContent='Analyser la page '+n;
+  const e=document.getElementById('pagesel');
+  if(e) e.textContent=SRC&&SRC.kind==='pdf' ? 'Page '+n+' sélectionnée' : '';
+  const b=document.getElementById('btnanalyser_txt');
+  if(b) b.textContent=SRC&&SRC.kind==='pdf' ? 'Analyser la page '+n : 'Analyser le plan';
+  const d=DIAGS[pageChoisie];
+  const zone=document.getElementById('diag_zone');
+  const btnA=document.getElementById('btnanalyser'), btnM=document.getElementById('btnmanuel');
+  const auto = SRC && SRC.analysable && (!d || (d.niveau!=='image' && d.niveau!=='vide'))
+               && (SRC.kind!=='dxf' || dxfAMur());
+  if(d){
+    zone.style.display='';
+    zone.className='diag '+(DIAG_LIB[d.niveau]||['','wrn'])[1];
+    zone.innerHTML=badgeDiag(d)+'<span>'+ech(DIAG_TXT[d.niveau]||'')+
+      (d.note?' — '+ech(d.note):'')+'</span>';
+  } else zone.style.display='none';
+  if(btnA){ btnA.style.display=auto?'':'none'; }
+  if(btnM){ btnM.style.display=(SRC&&!auto)?'':'none'; }
+  if(acc.status.className!=='err')
+    statut(auto && SRC && SRC.kind==='pdf' && SRC.nPages>1
+      ? 'Choisissez la page — un niveau par page — puis lancez l’analyse.' : '');
+  const h=document.getElementById('acc_hint');
+  if(h) h.textContent=auto
+    ? 'L’analyse se fait sur votre poste ; vous pourrez la relancer avec une autre finesse depuis le plan.'
+    : 'Rien à extraire automatiquement : le fond sera chargé tel quel et vous tracerez les cloisons vous-même.';
 }
+
+// --- calques du DXF : mur / porte / ignoré ---
+const DXF_ROLES=[['mur','Mur'],['porte','Porte'],['ignore','Ignorer']];
+function dxfAMur(){
+  if(!SRC||SRC.kind!=='dxf') return true;
+  return Object.values(SRC.choix).some(v=>v==='mur');
+}
+function majCalquesDXF(){
+  const M=SRC.M;
+  const u=document.getElementById('dxf_unites');
+  const mpu=(SRC.unites&&{mm:0.001,cm:0.01,m:1,'in':0.0254,ft:0.3048}[SRC.unites])||M.mpu;
+  const nom={0.001:'mm', 0.01:'cm', 1:'m', 0.0254:'pouce', 0.3048:'pied'}[mpu]
+            || (mpu+' m');
+  u.textContent='1 unité = 1 '+nom+
+    (SRC.unites ? ' (imposé)' : (M.unitesAuto ? ' (déduit de l’étendue)' : ' (lu dans le fichier)'));
+  const sel=document.getElementById('dxf_unit');
+  if(sel) sel.value=SRC.unites||'';
+  // les boutons portent l'indice du calque, jamais son nom : rien à ré-échapper
+  document.getElementById('dxf_liste').innerHTML=M.liste.map((st,i)=>{
+    const r=SRC.choix[st.nom]||'ignore';
+    return '<div class="lyr"><span class="lyrn" title="'+ech(st.nom)+'">'+ech(st.nom)+'</span>'+
+      '<span class="muted lyrc num">'+st.n+' traits'+(st.txt?' · '+st.txt+' txt':'')+'</span>'+
+      '<span class="lyrb">'+DXF_ROLES.map(([v,lib])=>
+        '<button class="segbtn'+(r===v?' on':'')+'" data-i="'+i+'" data-v="'+v+'">'+
+        lib+'</button>').join('')+'</span></div>';
+  }).join('');
+  document.getElementById('dxf_liste').querySelectorAll('button[data-i]').forEach(b=>{
+    b.onclick=()=>{ SRC.choix[M.liste[+b.dataset.i].nom]=b.dataset.v; SRC.invalider();
+                    majCalquesDXF(); rafraichirDXF(); };
+  });
+  const av=document.getElementById('dxf_avert');
+  av.className=dxfAMur()?'muted':'err';
+  av.textContent=dxfAMur()
+    ? 'Les calques reconnus comme murs portent l’analyse ; « Porte » sert aux portes et vitrages, le reste est ignoré.'
+    : 'Aucun calque de murs reconnu dans ce fichier : désignez-les ci-dessous pour pouvoir lancer l’analyse.';
+}
+let _dxfT=null;
+function rafraichirDXF(){
+  // le redessin complet est trop lourd pour chaque clic : on laisse retomber
+  clearTimeout(_dxfT);
+  _dxfT=setTimeout(async ()=>{
+    try{ await montrerVignettes(); }catch(e){ console.warn(e); }
+    majPageChoisie();
+  }, 180);
+}
+function dxfUnites(v){
+  if(!SRC||SRC.kind!=='dxf') return;
+  SRC.unites=v||null; SRC.invalider(); majCalquesDXF(); rafraichirDXF();
+}
+
 const MOTS_FINESSE={1:'très fin',2:'très fin',3:'fin',4:'équilibré',5:'équilibré',
                     6:'large',7:'large',8:'très large',9:'très large'};
 function majFinesse(v){
@@ -1872,17 +2821,19 @@ function ouvrirSansPlan(v){
 }
 document.getElementById('btnanalyser').onclick=()=>lancerAnalyse(pageChoisie,
   +document.getElementById('finesse').value, +document.getElementById('echelle').value||100);
+document.getElementById('btnmanuel').onclick=()=>lancerManuel();
 
 async function lancerAnalyse(pageNo, finesse, echelle){
   try{
     document.getElementById('btnanalyser').disabled=true;
     statut('Extraction vectorielle…');
-    const page=await pdfDoc.getPage(pageNo+1);
-    const extr=await MOTEUR.extraire(page);
+    if(SRC.kind==='dxf') echelle=100;             // le DXF porte ses propres unités
+    const extr=await SRC.extraire(pageNo);
     const payload=await MOTEUR.analyser(extr, finesse, echelle, statut);
     statut('Rendu du fond de plan…');
-    const bg=await MOTEUR.rendreFond(page, payload.clip);
-    payload.sheet=pdfNom;
+    const bg=await SRC.fond(pageNo, payload.clip);
+    payload.sheet=SRC.nom;
+    payload.source=SRC.kind;
     ouvrirEditeur(payload, bg);
     statut('');
   }catch(e){
@@ -1892,8 +2843,34 @@ async function lancerAnalyse(pageNo, finesse, echelle){
     document.getElementById('btnanalyser').disabled=false;
   }
 }
+
+// Relevé manuel : le fond est chargé tel quel, sans aucune détection. Tous les
+// outils de tracé de l'éditeur restent disponibles.
+async function lancerManuel(){
+  try{
+    document.getElementById('btnmanuel').disabled=true;
+    statut('Préparation du fond…');
+    const echelle=+document.getElementById('echelle').value||100;
+    const {pw,ph}=await SRC.dims(pageChoisie);
+    const bg=await SRC.fond(pageChoisie,[0,0,pw,ph]);
+    ouvrirEditeur({clip:[0,0,pw,ph], rooms:{}, pairs:[], polys:{}, portes:[],
+      matrix:RULES.matrice_stc, cats:Object.keys(RULES.categories),
+      vision_note:'relevé manuel — aucune détection automatique',
+      echelle, finesse:null, sheet:SRC.nom, source:SRC.kind, manuel:true}, bg);
+    statut('');
+    if(SRC.kind==='image')
+      toast('Fond image chargé', 'Calibrez l’échelle (touche M) avant de relever des longueurs.', 'warn');
+    else
+      toast('Relevé manuel', 'Tracez les cloisons (C) et les pièces (N).', 'ok');
+  }catch(e){
+    console.error(e); statut('Échec : '+(e.message||e), true);
+  }finally{
+    document.getElementById('btnmanuel').disabled=false;
+  }
+}
+
 function relancer(){
-  if(!pdfDoc) return;
+  if(!SRC||!SRC.analysable) return;
   retourEditeurApresAnalyse=true;
   document.getElementById('approot').style.display='none';
   document.getElementById('accueil').style.display='flex';
@@ -2813,7 +3790,7 @@ function appliquerEchelle(ptPerM){
     else if(D.rooms[c]) D.rooms[c].area_det=a;
   }
   document.getElementById('srvinfo').textContent=
-    (D.vision_note||'')+' · finesse '+(D.finesse??'?')+' · 1/'+(D.echelle??100);
+    (D.vision_note||'')+finesseTxt()+' · 1/'+(D.echelle??100);
   render(); panel();
 }
 
@@ -3349,7 +4326,7 @@ function expDXF(){
     w(0,'LWPOLYLINE'); w(8,'ZONES'); w(90,pts.length); w(70,1);
     for(const pt of pts){ w(10,MX(pt[0])); w(20,MY(pt[1])); } }
   w(0,'ENDSEC'); w(0,'EOF');
-  dl((D.sheet||'plan').replace(/\.pdf$/i,'')+'_cibles_STC.dxf', o.join('\r\n')+'\r\n',
+  dl((D.sheet||'plan').replace(/\.(pdf|svg|dxf|png|jpe?g|webp)$/i,'')+'_cibles_STC.dxf', o.join('\r\n')+'\r\n',
      'application/dxf');
 }
 function legend(){
@@ -3503,7 +4480,7 @@ function copieHTML(){
   return html;
 }
 async function saveHTML(){
-  const nom=(D.sheet||'plan').replace(/\.pdf$/i,'')+'_STC.html';
+  const nom=(D.sheet||'plan').replace(/\.(pdf|svg|dxf|png|jpe?g|webp)$/i,'')+'_STC.html';
   const ok=await enregistrer(nom, copieHTML(), 'text/html');
   if(ok){ lastSave=Date.now(); majSaveState();
           toast('Projet enregistré', nom, 'ok'); }
@@ -3547,7 +4524,7 @@ function ensurePptx(){
 async function expPPT(retour){
   ensurePptx();
   const PPTMIME='application/vnd.openxmlformats-officedocument.presentationml.presentation';
-  const pptFn=(D.sheet||'plan').replace(/\.pdf$/i,'')+'_STC.pptx';
+  const pptFn=(D.sheet||'plan').replace(/\.(pdf|svg|dxf|png|jpe?g|webp)$/i,'')+'_STC.pptx';
   let pptHandle=null;
   if(!retour && canPick()){ try{ pptHandle=await pickHandle(pptFn, PPTMIME); }
     catch(e){ if(e && e.name==='AbortError') return; } }
@@ -3679,7 +4656,7 @@ async function expPPT(retour){
 function applyState(j){
   if(j.echelle){ D.echelle=j.echelle; PT_PER_M=2834.6457/j.echelle;
     document.getElementById('srvinfo').textContent=
-      (D.vision_note||'')+' · finesse '+(D.finesse??'?')+' · 1/'+(D.echelle??100); }
+      (D.vision_note||'')+finesseTxt()+' · 1/'+(D.echelle??100); }
   Object.assign(state.cats,j.cats||{}); state.overrides=j.overrides||{};
   state.excluded=j.excluded||{}; Object.assign(state.matrix,j.matrix||{});
   state.manual=(j.manual||[]); state.manual.forEach(segMeta);
@@ -3700,6 +4677,8 @@ function applyState(j){
 function impJSON(ev){ const f=ev.target.files[0]; if(!f)return;
   f.text().then(tx=>{ pushUndo(); applyState(JSON.parse(tx)); });
 }
+// la finesse n'existe que si une analyse a eu lieu : muette en relevé manuel
+function finesseTxt(){ return D && D.finesse!=null ? ' · finesse '+D.finesse : ''; }
 function ouvrirEditeur(payload, bgURL){
   D=payload;
   if(bgURL) document.getElementById('bg').src=bgURL;
@@ -3719,16 +4698,18 @@ function initEditeur(){
   undoStack=[]; redoStack=[]; _snap=null; calibA=null; majUndoUI();
   calcInit();
   initPairs();
-  const nom=(D.sheet||'plan').replace(/\.pdf$/i,'');
+  const nom=(D.sheet||'plan').replace(/\.(pdf|svg|dxf|png|jpe?g|webp)$/i,'');
   document.title='Cibles STC — '+nom;
   document.getElementById('titre').textContent=nom;
   document.getElementById('srvinfo').textContent=
-    '1/'+(D.echelle??100)+' · finesse '+(D.finesse??'?');
+    '1/'+(D.echelle??100)+finesseTxt();
   const pi=document.getElementById('prjinfo');
   if(pi) pi.textContent=D.vision_note||'';
-  document.getElementById('srvctl').style.display = pdfDoc ? '' : 'none';
-  if(pdfDoc){ document.getElementById('srv_f').value=D.finesse??4;
-              document.getElementById('srv_fv').textContent=D.finesse??4; }
+  // relancer l'analyse n'a de sens que si la source est encore là et analysable
+  const relance = !!(SRC && SRC.analysable && !D.manuel);
+  document.getElementById('srvctl').style.display = relance ? '' : 'none';
+  if(relance){ document.getElementById('srv_f').value=D.finesse??4;
+               document.getElementById('srv_fv').textContent=D.finesse??4; }
   lastSave=null; majSaveState(); majChrome();
   setZonage(false); setPortes(true);
   legend(); matrixTable(); setView('plan'); setTab('val'); setMode('select');
@@ -3811,6 +4792,7 @@ planDiv.addEventListener('mouseleave', function(){
         const buf=await (await fetch(q.get('pdf'))).arrayBuffer();
         pdfDoc=await pdfjsLib.getDocument({data:buf}).promise;
         pdfNom=q.get('pdf').split('/').pop();
+        SRC=sourcePDF(pdfDoc, pdfNom);
         pageChoisie=(+q.get('page')||1)-1;
         await lancerAnalyse(pageChoisie, +q.get('finesse')||4, +q.get('echelle')||100);
         if(q.get('post')){

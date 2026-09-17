@@ -1,6 +1,9 @@
 # bancs d'essai construits a partir de releves reels : jamais publies
 _banc_*.html
 
+# plans d'essai fabriques par tests/fixtures.py, et plans reels de comparaison
+tests/fx/
+
 # artefacts locaux
 __pycache__/
 *.pyc

@@ -1,9 +1,10 @@
 # Cibles STC — V2
 
 Outil web autonome pour relever les **cibles d'affaiblissement acoustique (STC)**
-d'un plan d'architecture : on dépose le PDF vectoriel exporté de la CAO, l'outil
-détecte les locaux et les cloisons qui les séparent, les classe, et attribue à
-chaque cloison la cible du couple de catégories.
+d'un plan d'architecture : on dépose le plan exporté de la CAO — **PDF vectoriel,
+SVG ou DXF** — l'outil détecte les locaux et les cloisons qui les séparent, les
+classe, et attribue à chaque cloison la cible du couple de catégories. Un scan ou
+une image sert de fond à relever à la main.
 
 **→ [Ouvrir l'outil](https://thibaultniamor-commits.github.io/stc-plans-archi/)**
 
@@ -13,9 +14,21 @@ double-clic.
 
 ## Ce que fait l'outil
 
-- **Analyse d'un plan PDF** — extraction vectorielle des traits, détection des
-  murs, des locaux (numéro, nom, surface), des portes et des cages d'escalier ;
-  classement des locaux par mots-clés en six catégories acoustiques.
+- **Analyse d'un plan vectoriel** — PDF, SVG ou DXF : extraction des traits,
+  détection des murs, des locaux (numéro, nom, surface), des portes et des cages
+  d'escalier ; classement des locaux par mots-clés en six catégories acoustiques.
+- **Diagnostic avant analyse** — chaque page est examinée et reçoit un badge :
+  *Vectoriel*, *Vectoriel sans texte* (tracés lisibles mais libellés vectorisés à
+  l'export : les locaux seront à nommer à la main), *Image* (un scan : rien à
+  extraire) ou *Sans plan*. On sait donc avant de lancer ce que l'outil saura
+  tenir — et, pour les deux derniers cas, il propose le relevé manuel.
+- **DXF : les calques font foi** — plutôt que de deviner les murs à l'épaisseur
+  du trait, l'outil range les calques en *Mur* / *Porte* / *Ignorer* d'après leur
+  nom, et la répartition se corrige d'un clic. Les unités du fichier
+  (`$INSUNITS`) donnent l'échelle exacte : ni saisie, ni calibrage.
+- **Relevé manuel sur un fond image** — un PNG, un JPG ou une page PDF scannée se
+  charge comme fond ; toutes les corrections manuelles de l'éditeur (cloison,
+  pièce, espace, porte, calibrage en deux clics) restent disponibles.
 - **Cibles STC par cloison** — une matrice éditable donne la cible de chaque
   couple de catégories ; chaque valeur peut être forcée cloison par cloison.
 - **Correction à la main** — tracer, déplacer, allonger ou supprimer une
@@ -66,12 +79,55 @@ python build.py
 | `index.html` | l'outil construit — c'est ce qui est publié |
 | `src/outil_stc.src.html` | la source (interface + moteur), avec les marques `__PDFJS_B64__`… |
 | `regles_stc.json` | catégories de locaux, mots-clés, matrice STC de référence |
+| `VERSION` | numéro de version, source unique — injecté au build |
+| `CHANGELOG.md` | journal des versions |
 | `vendor/` | bibliothèques tierces embarquées au build |
 | `build.py` | assemblage |
+| `tests/` | banc d'essai headless |
+
+## Tests
+
+`tests/banc.mjs` ouvre `index.html` dans Chrome headless et fait passer chaque
+format d'entrée par le vrai chemin de l'outil — chargement, diagnostic, analyse,
+relevé manuel — sur des plans d'essai **synthétiques** : un même bâtiment décliné
+en DXF (millimètres et mètres), SVG, PDF vectoriel, PDF scanné et PNG.
+
+```
+pip install pymupdf        # une fois
+python tests/fixtures.py   # écrit tests/fx/, non versionné
+node tests/banc.mjs
+```
+
+`tests/nonreg.mjs` compare deux builds sur les mêmes plans, page par page. À
+lancer sur de vrais plans avant publication ; ils restent sur le poste, rien
+n'est versionné :
+
+```
+git show v2.0.0:index.html > avant.html
+node tests/nonreg.mjs <dossier> avant.html index.html plan1.pdf plan2.pdf
+```
+
+Chrome est cherché à son emplacement habituel sous Windows ; `CHROME_BIN` permet
+d'en désigner un autre.
+
+## Versions
+
+Le projet suit [SemVer](https://semver.org/lang/fr/). Le numéro tient dans
+`VERSION`, `build.py` l'inscrit dans `index.html`, et il s'affiche dans le pied de
+l'accueil et à côté du logo. Publier une version : mettre `VERSION` à jour,
+compléter `CHANGELOG.md`, reconstruire, puis étiqueter le commit `vX.Y.Z`. Le
+journal complet est dans [CHANGELOG.md](CHANGELOG.md).
 
 ## Limites connues
 
-- Le PDF doit être **vectoriel** (export CAO). Un scan ne donne rien.
+- L'analyse automatique exige un plan **vectoriel** (export CAO). Un scan n'est
+  pas analysé : l'outil le signale et bascule en relevé manuel.
+- En DXF, les `HATCH`, `DIMENSION` et `MLINE` ne sont pas développés, et les
+  bombements (*bulge*) des polylignes sont rendus par leur corde.
+- En SVG comme en PDF, les **courbes** rompent la polyligne sans produire de
+  segment : un mur dessiné en courbe n'est pas lu.
+- Les murs dessinés en **aplat plein** (poché sans contour au trait) ne sont pas
+  lus ; le diagnostic le signale quand la page en compte beaucoup.
 - Classement des locaux par **mots-clés français** ; un local non reconnu se
   reclasse à la main.
 - Les atriums et escaliers mécaniques ne sont pas détectés comme locaux ; les
@@ -99,6 +155,9 @@ Embarquées dans `index.html` au moment du build :
   licence Apache-2.0.
 - [PptxGenJS](https://gitbrent.github.io/PptxGenJS/) 3.12.0 — Brent Ely,
   licence MIT.
+
+Les lectures SVG et DXF n'ajoutent aucune dépendance : le SVG passe par le moteur
+de rendu du navigateur, le DXF par un analyseur écrit pour ce projet.
 
 ## Licence
 
