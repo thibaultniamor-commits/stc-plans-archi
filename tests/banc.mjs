@@ -163,6 +163,29 @@ async function main() {
   verif('PDF vectoriel : locaux detectes', p && p.rooms >= 12, JSON.stringify(p && {r:p.rooms,c:p.pairs,d:p.portes}));
   verif('PDF vectoriel : noms de locaux lus', p && p.nomsLus >= 10, p && ('' + p.nomsLus));
   verif('PDF vectoriel : echelle juste (local ~29 m2)', p && p.aireMed > 25 && p.aireMed < 32, p && (p.aireMed + ' m2'));
+  // 2b — reprendre un libelle detecte : c'est indispensable des lors que les
+  // noms viennent d'une reconnaissance de forme, qui se trompe parfois
+  const rn = await evalue(`(()=>{ const c=Object.keys(D.rooms)[0];
+    selRoom=c; panel();
+    renommerPiece(c,'name','Salle de contrôle'); renommerPiece(c,'num','999');
+    const q=D.pairs.find(x=>String(x.ca)===String(c)||String(x.cb)===String(c));
+    return {nom:D.rooms[c].name, num:D.rooms[c].num,
+            surPaire:q?(String(q.ca)===String(c)?q.name_a:q.name_b):null,
+            enregistre:(etatValidation().noms||{})[c]||null,
+            champ:(document.getElementById('rname')||{}).value }; })()`);
+  verif('Renommer : le libellé détecté est modifiable',
+    rn.nom === 'Salle de contrôle' && rn.num === '999', JSON.stringify(rn));
+  verif('Renommer : le nom suit jusque dans les cloisons',
+    rn.surPaire === 'Salle de contrôle', JSON.stringify(rn.surPaire));
+  verif('Renommer : le nom est gardé dans l’état enregistré',
+    !!rn.enregistre && rn.enregistre.name === 'Salle de contrôle',
+    JSON.stringify(rn.enregistre));
+  await evalue("undo(); undo(); selRoom=null; panel(); true");
+  await dors(200);
+  verif('Renommer : l’annulation revient au libellé lu',
+    (await evalue(`(()=>{ const c=Object.keys(D.rooms)[0];
+       return D.rooms[c].name!=='Salle de contrôle'; })()`)),
+    await evalue(`D.rooms[Object.keys(D.rooms)[0]].name`));
   // 2b — la barre d'outils et ses menus, qu'un overflow:hidden rognait
   verif('barre d’outils : le dernier groupe tient dans la barre',
     (await evalue('__barre()')).debord <= 0, JSON.stringify(await evalue('__barre()')));
@@ -199,6 +222,70 @@ async function main() {
     JSON.stringify(await evalue('__plan() && {r:__plan().rooms, c:__plan().pairs}')));
 
   await evalue("retourAccueil()");
+
+  // 2c — murs pochés : le meme batiment, murs remplis sans aucun contour au trait
+  await evalue("(async()=>chargerPlan(await __fx('plan_poche.pdf')))()");
+  await dors(1800);
+  e = await evalue('__etat()');
+  verif('Poché : la page est reconnue analysable', e.btnA && !e.btnM, JSON.stringify(e.diags));
+  const poch = await evalue(`(async()=>{ const x=await SRC.extraire(0);
+    const p=MOTEUR.pochesDeMur(x.drawings, 2834.6457/100, new Set());
+    return {n:p.length, ep:p.length?Math.round(p[0].epais_m*100)/100:null}; })()`);
+  verif('Poché : les 11 murs en aplat sont releves', poch.n === 11, JSON.stringify(poch));
+  verif('Poché : leur epaisseur est juste (0,15 m)',
+    Math.abs(poch.ep - 0.15) < 0.02, poch.ep + ' m');
+  await evalue("lancerAnalyse(0, 4, 100)");
+  await dors(4000);
+  p = await evalue('__plan()');
+  verif('Poché : locaux detectes', p && p.rooms >= 16, JSON.stringify(p && {r:p.rooms,c:p.pairs,d:p.portes}));
+  verif('Poché : noms de locaux lus', p && p.nomsLus >= 16, p && ('' + p.nomsLus));
+  verif('Poché : echelle juste (local ~29 m2)', p && p.aireMed > 25 && p.aireMed < 32, p && (p.aireMed + ' m2'));
+  verif('Poché : le mobilier n’est pas pris pour des murs',
+    p && p.pairs >= 20 && p.pairs <= 40, p && ('' + p.pairs));
+  verif('Poché : l’analyse le signale', /aplat plein/.test((p && p.note) || ''), p && p.note);
+  await evalue("retourAccueil()");
+
+  // 2d — echelle deduite des battants de porte
+  for (const [fx, att] of [['plan_poche.pdf', 100], ['plan_poche_50.pdf', 50]]) {
+    await evalue(`(async()=>chargerPlan(await __fx('${fx}')))()`);
+    await dors(1800);
+    const r = await evalue(`(async()=>{ const x=await SRC.extraire(0);
+      return MOTEUR.echelleAuto(x.drawings, x.pw, x.ph, x.words); })()`);
+    verif('Échelle : ' + fx + ' est reconnu 1/' + att,
+      !!r && r.ech === att && r.sure === true, JSON.stringify(r));
+    verif('Échelle : ' + fx + ' — le cartouche confirme',
+      !!r && r.cartouche === att && r.accord === true,
+      JSON.stringify({ c: r && r.cartouche }));
+    await evalue("document.getElementById('echelle').value=333");
+    await evalue("detecterEchelle()");
+    await dors(3000);
+    verif('Échelle : le bouton Détecter renseigne le champ',
+      (await evalue("+document.getElementById('echelle').value")) === att,
+      await evalue("document.getElementById('ech_note').textContent"));
+    await evalue("retourAccueil()");
+  }
+
+  // 2e — lecture des etiquettes : numero, nom dessous, surface dessous.
+  // Les cas durs viennent des glyphes vectorises : les chiffres y respirent plus
+  // que les lettres (« 11 » sortait « 1 1 »), et le tiret d'un sous-local se perd.
+  const mot = (s, x, y, h) => ({ s, x, y, x0: x - s.length * h * 0.3,
+                                 x1: x + s.length * h * 0.3, y0: y - h / 2, h });
+  const etiq = await evalue('MOTEUR.etiquettes(' + JSON.stringify([
+    mot('317', 100, 100, 4.8),
+    mot('Salle', 92, 110, 3.6), mot('de', 102, 110, 3.6), mot('réunion', 114, 110, 3.6),
+    mot('1 1 m', 100, 117, 3.6),
+    mot('305 - 1', 300, 100, 4.8), mot('Bureau', 300, 110, 3.6),
+    mot('2400', 500, 100, 3.0)
+  ]) + ')');
+  const e317 = etiq.find(x => x.num === '317') || {};
+  const e305 = etiq.find(x => x.num === '305-1') || {};
+  verif('Étiquette : numero et nom apparies', e317.nom === 'Salle de réunion',
+    JSON.stringify(e317));
+  verif('Étiquette : « 1 1 m » est bien 11 m²', e317.aire === 11, JSON.stringify(e317.aire));
+  verif('Étiquette : le sous-local garde son tiret', e305.nom === 'Bureau',
+    JSON.stringify(e305));
+  verif('Étiquette : une cote isolee n’en est pas une',
+    !etiq.some(x => x.num === '2400'), JSON.stringify(etiq.map(x => x.num)));
 
   // 3 — PDF scanne
   await evalue("(async()=>chargerPlan(await __fx('plan_scan.pdf')))()");

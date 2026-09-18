@@ -4,6 +4,88 @@ Les versions suivent [SemVer](https://semver.org/lang/fr/) : `MAJEUR.MINEUR.CORR
 Le numéro vit dans le fichier `VERSION` ; `build.py` l'inscrit dans `index.html`,
 où il s'affiche dans le pied de l'accueil et à côté du logo dans l'éditeur.
 
+## 2.4.0 — 2026-09-18
+
+Les trois premiers points du carnet de reprise : les murs pochés, les libellés
+vectorisés, l'échelle. La géométrie ne bouge pas — mêmes locaux, mêmes surfaces,
+mêmes cloisons — mais les locaux ont désormais un nom, et l'échelle se lit sur le
+plan au lieu de se saisir.
+
+| Niveau | locaux | retrouvés | fusions | manques | écart médian | noms lus | numéros justes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 01 | 23 | 23 | 0 | 0 | 1,7 % | 0 → **23** | 0 → **21** |
+| 02 | 37 | 37 | 0 | 0 | 2,5 % | 0 → **37** | 0 → **33** |
+| 03 | 37 | 37 | 0 | 0 | 3,3 % | 0 → **36** | 0 → **34** |
+
+### Ajouté
+
+- **Les murs dessinés en aplat plein sont lus.** Un plan dont les murs sont
+  pochés sans contour au trait ressortait vide : `balayerPDF` comptait l'aplat
+  puis jetait le chemin, et un mur tracé en rectangle ne donnait aucun segment,
+  même au trait. Les contours fermés des aplats sont maintenant retenus, les
+  rectangles développés en leurs quatre côtés, et les aplats sombres, longs et
+  minces — ni un L, ni une étoile, ni un jambage de lettre — peints dans les
+  masques à leur épaisseur réelle. Sur un plan poché, le seuil de largeur de
+  trait n'est plus abaissé : les pochés *sont* les murs, et l'abaisser ferait
+  passer le mobilier pour des cloisons.
+- **Les libellés vectorisés sont lus par reconnaissance de forme.** C'était le
+  cas des trois plans d'essai : `getTextContent` ne rendait que le cartouche et
+  les 97 locaux sortaient « Espace non identifié », donc sans catégorie
+  acoustique ni cible STC. Les lettres, restées là en aplats de la taille d'un
+  caractère, sont reconnues à leur silhouette, comparée à un alphabet que le
+  navigateur dessine lui-même — pas d'OCR à embarquer, rien qui sorte du poste.
+  La silhouette seule ne suffit pas : trois mesures prises dans les métriques de
+  la ligne (hauteur au-dessus du pied, jambage, largeur) séparent le « M » du
+  point, le « H » du « n », le « g » du « 9 ». **96 noms de locaux sur 97** sont
+  lus, à 97 % de ressemblance moyenne.
+- **Les étiquettes se lisent en bloc.** Un numéro, le nom dessous, la surface
+  encore dessous : c'est la disposition de tous les plans d'architecte. La lire
+  ainsi vaut mieux que de ramasser tous les mots tombés dans la cellule — les
+  cotes, les repères de menuiserie et les légendes n'entrent plus dans le nom du
+  local. L'étiquette s'accroche à son nom et non à son numéro, celui-ci étant
+  encadré d'un rectangle tracé que le moteur voit comme un mur.
+- **L'échelle se déduit du plan.** Le rayon des battants de porte désigne, parmi
+  les échelles usuelles, celle à laquelle les portes de ce plan ont une largeur
+  de porte — les échelles s'échelonnent d'un quart en un quart, les portes ne
+  varient que de quinze pour cent, la désignation est donc franche. Le cartouche
+  (« 1 : 100 ») sert de recoupement, et la divergence est dite. Un bouton
+  *Détecter* renseigne le champ à l'accueil ; à l'issue de l'analyse, une échelle
+  manifestement fausse est signalée, sans calcul supplémentaire puisque les
+  battants sont déjà relevés.
+- **Le numéro et le nom d'un local détecté se corrigent.** Ils ne l'étaient que
+  pour les espaces tracés à la main. Un nom lu par reconnaissance de forme garde
+  parfois une lettre de travers, et il commande la catégorie et la cible STC : il
+  se reprend dans le panneau de la pièce, suit jusque dans les cloisons, les
+  métrés et les exports, s'annule et s'enregistre avec le reste.
+- **Le texte pivoté n'est plus jeté.** `motsPDF` écartait tout ce dont la matrice
+  n'était pas droite — le nom d'un local posé sur une gaine verticale, une
+  légende de coupe. Chaque mot est maintenant posé le long de sa propre direction
+  d'écriture. Même chose pour le SVG.
+- **Le SVG livre aussi ses aplats**, donc ses murs pochés et ses libellés
+  vectorisés, par le même chemin que le PDF.
+- **Un badge *Texte vectorisé*** à l'accueil, distinct de *Sans texte* : le
+  premier annonce des libellés lus par reconnaissance de forme, le second des
+  locaux à nommer à la main.
+
+### Corrigé
+
+- **La classification tolère les confusions de forme.** « Salle » lu « SaIIe » ne
+  trouvait plus le mot-clé « salle » : le local tombait dans `prive`, cible 45 au
+  lieu de 50-55. Les noms se comparent maintenant aussi à travers les familles de
+  formes que rien ne sépare (l/i/1, o/0, s/5, g/9…).
+
+### Modifié
+
+- **Le banc de vérité terrain mesure les libellés** : numéros exacts, noms
+  reconnus, ressemblance moyenne, et la liste de ceux qui restent à revoir avec
+  ce que le plan dit et ce qui a été lu.
+- **Deux plans d'essai de plus** — le même bâtiment aux murs pochés, à 1/100 et à
+  1/50 — et le banc fonctionnel passe de 41 à 63 vérifications : murs en aplat et
+  leur épaisseur, déduction d'échelle et recoupement du cartouche, lecture des
+  étiquettes (« 11 m² » que les blancs entre chiffres coupaient en « 1 1 m », le
+  tiret d'un sous-local, une cote isolée qui n'est pas un numéro), correction
+  d'un libellé et son annulation.
+
 ## 2.3.0 — 2026-09-18
 
 Refonte de la détection des espaces. Mesurée sur trois niveaux d'un vrai projet,

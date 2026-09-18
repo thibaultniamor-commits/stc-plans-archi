@@ -21,11 +21,25 @@ double-clic.
   chaque pièce reprend ce que le mobilier lui mangeait : sur trois niveaux d'un
   vrai projet, 97 locaux sur 97 sont retrouvés, sans fusion, à 3 % près en
   surface (voir [CHANGELOG.md](CHANGELOG.md), 2.3.0).
+- **Murs au trait ou en aplat plein** — un plan dont les murs sont pochés sans
+  contour ressortait vide. Les aplats sombres, longs et minces sont maintenant
+  relevés comme des murs, à leur épaisseur réelle.
+- **Libellés vectorisés lus par reconnaissance de forme** — quand l'export a
+  converti les textes en dessin, les lettres sont reconnues à leur silhouette,
+  comparée à un alphabet que le navigateur dessine lui-même : rien à installer,
+  rien à envoyer. Sur les trois niveaux d'essai, 96 noms de locaux sur 97 sont
+  lus, et chacun se reprend dans le panneau de la pièce.
+- **Échelle déduite du plan** — le rayon des battants de porte désigne, parmi les
+  échelles usuelles, celle à laquelle les portes de ce plan ont une largeur de
+  porte ; le cartouche (« 1 : 100 ») sert de recoupement, et la divergence est
+  signalée. Le bouton *Détecter* renseigne le champ, et une échelle manifestement
+  fausse est signalée à l'issue de l'analyse.
 - **Diagnostic avant analyse** — chaque page est examinée et reçoit un badge :
-  *Vectoriel*, *Vectoriel sans texte* (tracés lisibles mais libellés vectorisés à
-  l'export : les locaux seront à nommer à la main), *Image* (un scan : rien à
-  extraire) ou *Sans plan*. On sait donc avant de lancer ce que l'outil saura
-  tenir — et, pour les deux derniers cas, il propose le relevé manuel.
+  *Vectoriel*, *Texte vectorisé* (libellés convertis en dessin : ils seront lus
+  par reconnaissance de forme), *Sans texte* (aucun libellé exploitable : les
+  locaux seront à nommer à la main), *Image* (un scan : rien à extraire) ou
+  *Sans plan*. On sait donc avant de lancer ce que l'outil saura tenir — et, pour
+  les deux derniers cas, il propose le relevé manuel.
 - **DXF : les calques font foi** — plutôt que de deviner les murs à l'épaisseur
   du trait, l'outil range les calques en *Mur* / *Porte* / *Ignorer* d'après leur
   nom, et la répartition se corrige d'un clic. Les unités du fichier
@@ -36,10 +50,11 @@ double-clic.
 - **Cibles STC par cloison** — une matrice éditable donne la cible de chaque
   couple de catégories ; chaque valeur peut être forcée cloison par cloison.
 - **Correction à la main** — tracer, déplacer, allonger ou supprimer une
-  cloison ; reprendre le contour d'une pièce ; poser une porte et lui donner son
-  STC ; calibrer l'échelle en deux clics sur une cote connue ; auto-connexion
-  (redressement et soudure des extrémités) avec tolérance réglable. Annuler /
-  rétablir sur toute la session.
+  cloison ; reprendre le contour d'une pièce ; **corriger le numéro et le nom
+  d'un local**, qui suivent jusque dans les cloisons, les métrés et les exports ;
+  poser une porte et lui donner son STC ; calibrer l'échelle en deux clics sur
+  une cote connue ; auto-connexion (redressement et soudure des extrémités) avec
+  tolérance réglable. Annuler / rétablir sur toute la session.
 - **Relance sur place** — changer la finesse et relancer le moteur se fait depuis
   le plan, sans repasser par l'accueil : un voile montre l'étape courante, et si
   l'analyse échoue le relevé en cours est rendu intact.
@@ -90,14 +105,16 @@ python build.py
 | `CHANGELOG.md` | journal des versions |
 | `vendor/` | bibliothèques tierces embarquées au build |
 | `build.py` | assemblage |
-| `tests/` | banc d'essai headless |
+| `tests/` | bancs d'essai headless |
+| `RESTE-A-FAIRE.md` | carnet de reprise : ce qui reste ouvert dans le moteur |
 
 ## Tests
 
 `tests/banc.mjs` ouvre `index.html` dans Chrome headless et fait passer chaque
 format d'entrée par le vrai chemin de l'outil — chargement, diagnostic, analyse,
 relevé manuel — sur des plans d'essai **synthétiques** : un même bâtiment décliné
-en DXF (millimètres et mètres), SVG, PDF vectoriel, PDF scanné et PNG.
+en DXF (millimètres et mètres), SVG, PDF vectoriel, PDF à murs pochés (à 1/100 et
+à 1/50, pour la déduction d'échelle), PDF scanné et PNG.
 
 ```
 pip install pymupdf        # une fois
@@ -108,7 +125,10 @@ node tests/banc.mjs
 `tests/verite.mjs` mesure la **justesse** : le plan passe dans le vrai chemin de
 l'outil, et le relevé est confronté à une liste de locaux lue sur le plan —
 numéro, nom, surface déclarée et un point sûr du local, en points PDF. Le rapport
-donne les locaux retrouvés, les fusions, les manques et l'écart de surface.
+donne les locaux retrouvés, les fusions, les manques, l'écart de surface, et la
+justesse des libellés : numéros exacts, noms reconnus, et la liste de ceux qui
+restent à revoir. Les noms se comparent à travers les familles de formes que la
+reconnaissance confond (l/i/1, o/0, g/9…), comme le fait la classification.
 
 ```
 node tests/verite.mjs index.html <plan.pdf> <verite.json> [finesse] [sortie.json]

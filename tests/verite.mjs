@@ -121,6 +121,39 @@ async function analyser() {
   }
 }
 
+// --- justesse des libellés ---
+// Un nom lu sur des glyphes vectorisés garde des lettres de travers : le « l »
+// et le « I » ont le même dessin, le « g » et le « 9 » se ressemblent. On
+// compare donc à travers ces familles, comme le fait la classification du
+// moteur, et on tolère une lettre fausse sur quatre.
+const FLOUS = [['l', 'i', '1', '!', '|'], ['o', '0'], ['s', '5'],
+               ['g', '9', 'q'], ['z', '2'], ['b', '6'], ['c', 'e']];
+function flou(s) {
+  let n = (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '');
+  for (const f of FLOUS) n = n.replace(new RegExp('[' + f.join('') + ']', 'g'), f[0]);
+  return n;
+}
+function lev(a, b) {
+  const m = a.length, n = b.length;
+  if (!m || !n) return Math.max(m, n);
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++)
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1,
+                        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function ressemble(lu, attendu) {
+  const a = flou(lu), b = flou(attendu);
+  if (!b) return null;
+  if (!a) return 0;
+  return Math.max(0, 1 - lev(a, b) / Math.max(a.length, b.length));
+}
+
 function mesurer(D) {
   const polys = D.polys, rooms = D.rooms;
   const parRoom = new Map();          // id détecté -> [locaux de la vérité]
@@ -144,17 +177,24 @@ function mesurer(D) {
       L.err = (L.det.area_det - L.v.area_m2) / L.v.area_m2;
       errs.push(L.err);
     }
+    L.sim = L.v.name ? ressemble(L.det?.name, L.v.name) : null;
+    L.numOk = L.v.num != null && String(L.det?.num) === String(L.v.num);
   }
   for (const [, vs] of parRoom) if (vs.length > 1) fusions += vs.length;
   const enTrop = Object.keys(rooms).filter(k => !parRoom.has(k));
   errs.sort((a, b) => a - b);
   const med = errs.length ? errs[errs.length >> 1] : NaN;
   const abs = errs.map(Math.abs).sort((a, b) => a - b);
+  const sims = lignes.filter(L => L.sim != null).map(L => L.sim);
   return {
     lignes, manques, fusions, ok, enTrop,
     nDet: Object.keys(rooms).length, nVerite: V.rooms.length,
     errMed: med, errAbsMed: abs.length ? abs[abs.length >> 1] : NaN,
-    err10: abs.filter(e => e > 0.10).length, nErr: errs.length
+    err10: abs.filter(e => e > 0.10).length, nErr: errs.length,
+    nNoms: sims.length, nomsBons: sims.filter(s => s >= 0.75).length,
+    nomsVides: lignes.filter(L => L.sim === 0).length,
+    numsBons: lignes.filter(L => L.numOk).length,
+    simMoy: sims.length ? sims.reduce((a, b) => a + b, 0) / sims.length : NaN
   };
 }
 
@@ -181,8 +221,24 @@ console.log('  détectés au total         ' + M.nDet + '   (dont ' + M.enTrop.l
 console.log('  écart de surface médian    ' + pc(M.errMed) + '   (|écart| médian ' +
   pc(M.errAbsMed) + ')');
 console.log('  locaux à plus de 10 %     ' + M.err10 + ' / ' + M.nErr);
+console.log('  numéros justes            ' + M.numsBons + ' / ' + M.nVerite);
+console.log('  noms reconnus             ' + M.nomsBons + ' / ' + M.nNoms +
+  '   (ressemblance moyenne ' + (M.simMoy * 100).toFixed(0) + ' %, ' +
+  M.nomsVides + ' non lus)');
 console.log('  cloisons                  ' + D.pairs.length + '   portes ' + D.portes);
 if (erreurs.length) console.log('  erreurs JS : ' + erreurs.slice(0, 3).join(' | '));
+
+// les libellés les moins bien lus : c'est là qu'on voit ce que la
+// reconnaissance de forme confond encore
+const pires = M.lignes.filter(L => L.sim != null && L.sim < 0.75)
+  .sort((a, b) => a.sim - b.sim);
+if (pires.length) {
+  console.log('\n  noms à revoir :');
+  for (const L of pires.slice(0, 12))
+    console.log('    ' + (L.v.num + '      ').slice(0, 7) +
+      (L.sim * 100).toFixed(0).padStart(3) + ' %   plan « ' + L.v.name +
+      ' »   lu « ' + (L.det?.name ?? '—') + ' »');
+}
 
 if (SORTIE) {
   writeFileSync(SORTIE, JSON.stringify({
@@ -190,10 +246,12 @@ if (SORTIE) {
     resume: {
       nVerite: M.nVerite, ok: M.ok, fusions: M.fusions, manques: M.manques,
       nDet: M.nDet, enTrop: M.enTrop.length, errMed: M.errMed,
-      errAbsMed: M.errAbsMed, err10: M.err10, pairs: D.pairs.length, portes: D.portes
+      errAbsMed: M.errAbsMed, err10: M.err10, pairs: D.pairs.length, portes: D.portes,
+      numsBons: M.numsBons, nomsBons: M.nomsBons, nNoms: M.nNoms, simMoy: M.simMoy
     },
     lignes: M.lignes.map(L => ({ num: L.v.num, etat: L.etat, decl: L.v.area_m2,
-                                 det: L.det?.area_det ?? null, err: L.err ?? null }))
+                                 det: L.det?.area_det ?? null, err: L.err ?? null,
+                                 nom: L.det?.name ?? null, sim: L.sim ?? null }))
   }, null, 1));
   console.log('\n  écrit : ' + SORTIE);
 }

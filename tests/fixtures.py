@@ -168,6 +168,54 @@ def ecrire_pdf(chemin, scanne=False):
     doc.close()
 
 
+def murs_poche():
+    """Les memes murs, en barreaux pleins : (x0, y0, x1, y1) en metres."""
+    out = []
+    dx, dy = LARG / NX, HAUT / NY
+    for i in range(NX + 1):
+        x = i * dx
+        out.append((x - EP / 2, 0.0, x + EP / 2, HAUT))
+    for j in range(NY + 1):
+        y = j * dy
+        out.append((0.0, y - EP / 2, LARG, y + EP / 2))
+    return out
+
+
+def ecrire_pdf_poche(chemin, echelle=100):
+    """Plan dont les murs sont poches — remplis, sans aucun contour au trait.
+
+    C'est le cas qui sortait vide : le moteur ne lisait que les traits. L'echelle
+    est parametrable, pour eprouver la deduction d'echelle par les battants."""
+    import fitz
+    pt_m = 72 / 25.4 * 1000 / echelle
+    W, H = LARG * pt_m + 40, HAUT * pt_m + 40
+    doc = fitz.open()
+    page = doc.new_page(width=W, height=H)
+    X = lambda x: 20 + x * pt_m
+    Y = lambda y: 20 + (HAUT - y) * pt_m
+    for x0, y0, x1, y1 in murs_poche():
+        page.draw_rect(fitz.Rect(X(x0), Y(y1), X(x1), Y(y0)),
+                       color=None, fill=(0, 0, 0))
+    for x1, y1, x2, y2 in mobilier():
+        page.draw_line(fitz.Point(X(x1), Y(y1)), fitz.Point(X(x2), Y(y2)),
+                       color=(.3, .3, .3), width=0.25)
+    # le battant en une seule polyligne : c'est ce qui permet d'en mesurer le
+    # rayon, donc de retrouver l'echelle du plan
+    for cx, cy, r in portes():
+        pts = [fitz.Point(X(cx + r * math.cos(a * math.pi / 180)),
+                          Y(cy + r * math.sin(a * math.pi / 180)))
+               for a in range(0, 95, 5)]
+        page.draw_polyline(pts, color=(.3, .3, .3), width=0.25)
+        page.draw_line(fitz.Point(X(cx), Y(cy)),
+                       fitz.Point(X(cx + r), Y(cy)), color=(.3, .3, .3), width=0.25)
+    for x, y, s in libelles():
+        page.insert_text(fitz.Point(X(x) - len(s) * 2.2, Y(y)),
+                         s, fontsize=8 * 100 / echelle)
+    page.insert_text(fitz.Point(W - 90, H - 12), "1 : %d" % echelle, fontsize=8)
+    doc.save(chemin)
+    doc.close()
+
+
 def ecrire_png(chemin):
     import fitz
     tmp = os.path.join(ICI, "_tmp_plan.pdf")
@@ -185,6 +233,8 @@ if __name__ == "__main__":
     ecrire_svg(os.path.join(d, "plan.svg"))
     ecrire_pdf(os.path.join(d, "plan.pdf"))
     ecrire_pdf(os.path.join(d, "plan_scan.pdf"), scanne=True)
+    ecrire_pdf_poche(os.path.join(d, "plan_poche.pdf"))
+    ecrire_pdf_poche(os.path.join(d, "plan_poche_50.pdf"), echelle=50)
     ecrire_png(os.path.join(d, "plan.png"))
     for f in sorted(os.listdir(d)):
         print(f, os.path.getsize(os.path.join(d, f)))

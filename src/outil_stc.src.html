@@ -469,6 +469,7 @@ button.ptab.on .cnt{ color:#cfe0ff; }
           <input type="number" id="echelle" value="100" min="20" max="500" style="width:76px;text-align:center">
           <button class="preset" onclick="document.getElementById('echelle').value=50">50</button>
           <button class="preset" onclick="document.getElementById('echelle').value=200">200</button>
+          <button class="preset" id="btn_ech_auto" onclick="detecterEchelle()">Détecter</button>
         </div>
         <div class="muted" style="margin-top:6px" id="ech_note">Ou calibrez à l'écran en cliquant deux points d'une cote connue.</div>
       </div>
@@ -1054,12 +1055,30 @@ const RSCALE = 2;
 const AIRE_ANON = 2.0;
 
 function norm_(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+// Un nom lu sur des glyphes vectoris\u00e9s garde quelques lettres de travers : la
+// barre (l/i/1), le rond (o/0), et deux ou trois autres couples que la forme ne
+// s\u00e9pare pas. On compare donc les noms \u00e0 travers ces familles \u2014 \u00ab saiie de
+// reunion \u00bb retrouve \u00ab salle \u00bb, et la cible STC avec.
+const FLOUS=[['l','i','1','!','|'],['o','0'],['s','5'],['g','9','q'],
+             ['z','2'],['b','6'],['c','e']];
+function flou_(s){
+  let n=norm_(s).replace(/[^a-z0-9]+/g,' ');
+  for(const fam of FLOUS){
+    const re=new RegExp('['+fam.join('')+']','g');
+    n=n.replace(re, fam[0]);
+  }
+  return n;
+}
 function classifier(nom){
   const n = norm_(nom);
   const ordre = RULES.ordre || Object.keys(RULES.categories);
   for(const cat of ordre)
     for(const kw of RULES.categories[cat])
       if(n.includes(kw)) return cat;
+  const f = flou_(nom);
+  for(const cat of ordre)
+    for(const kw of RULES.categories[cat])
+      if(kw.length>=4 && f.includes(flou_(kw))) return cat;
   return 'prive';
 }
 function sombre(rgb){ return (0.299*rgb[0]+0.587*rgb[1]+0.114*rgb[2])/255 < 0.6; }
@@ -1087,6 +1106,58 @@ function lignesUtiles(d){
     if(j-i >= 3){ for(let k=i;k<=j;k++) drop[k]=true; i=j+1; } else i++;
   }
   return segs.filter((_,k)=>!drop[k]);
+}
+
+// ---- murs pochés : les aplats sombres, longs et minces ----
+// Un plan dont les murs sont remplis sans contour au trait ne donnait aucune
+// cloison : `balayerPDF` comptait l'aplat puis jetait le chemin. On retient
+// maintenant ses contours, et on ne garde ici que ceux qui ont la forme d'un
+// mur — un barreau plein, ni un L, ni une étoile, ni un jambage de lettre.
+function pochesDeMur(drawings, ptPerM, exclues){
+  const EMIN=0.035*ptPerM, EMAX=0.75*ptPerM, LMIN=0.45*ptPerM;
+  const out=[];
+  for(const d of drawings){
+    if(d.type!=='f' || !d.polys || !sombre(d.rgb) || d.dashed) continue;
+    for(const p of d.polys){
+      if(p.length<4 || (exclues && exclues.has(p))) continue;
+      let a=0, cx=0, cy=0;
+      for(let i=0;i<p.length;i++){
+        const q=p[i], r=p[(i+1)%p.length];
+        const cr=q[0]*r[1]-r[0]*q[1];
+        a+=cr; cx+=(q[0]+r[0])*cr; cy+=(q[1]+r[1])*cr;
+      }
+      a/=2;
+      if(Math.abs(a)<1e-6) continue;
+      cx/=6*a; cy/=6*a;
+      const aire=Math.abs(a);
+      // Moments du contour pondérés par la longueur des arêtes, et non comptés
+      // par sommet : un coin répété ou une courbe finement découpée ferait
+      // basculer l'axe, et l'épaisseur mesurée avec lui.
+      let sxx=0, sxy=0, syy=0, per=0;
+      for(let i=0;i<p.length;i++){
+        const q=p[i], r=p[(i+1)%p.length];
+        const w=Math.hypot(r[0]-q[0], r[1]-q[1]);
+        if(w<1e-9) continue;
+        per+=w;
+        const dx=(q[0]+r[0])/2-cx, dy=(q[1]+r[1])/2-cy;
+        sxx+=w*dx*dx; sxy+=w*dx*dy; syy+=w*dy*dy;
+      }
+      if(per<1e-9) continue;
+      const th=0.5*Math.atan2(2*sxy, sxx-syy), ux=Math.cos(th), uy=Math.sin(th);
+      let t0=1e9, t1=-1e9, s0=1e9, s1=-1e9;
+      for(const q of p){
+        const dx=q[0]-cx, dy=q[1]-cy, t=dx*ux+dy*uy, s=-dx*uy+dy*ux;
+        if(t<t0)t0=t; if(t>t1)t1=t; if(s<s0)s0=s; if(s>s1)s1=s;
+      }
+      const L=t1-t0, e=s1-s0;
+      if(e<EMIN || e>EMAX || L<LMIN || L<e*2.2) continue;
+      if(aire < 0.55*L*e) continue;
+      const sc=(s0+s1)/2;
+      out.push({poly:p, L, e, epais_m:e/ptPerM,
+        axe:[cx+ux*t0-uy*sc, cy+uy*t0+ux*sc, cx+ux*t1-uy*sc, cy+uy*t1+ux*sc]});
+    }
+  }
+  return out;
 }
 
 function seuilMurs(segs, murMin){
@@ -1266,7 +1337,11 @@ function arcInfo(pts, cx, cy){
   const span=(2*Math.PI-gmax)*180/Math.PI;
   return [span, angs[(ig+1)%angs.length][1], angs[ig][1]];
 }
-function detecterPortes(drawings, clip, ptPerM){
+// `large` élargit la fenêtre de rayons acceptés : c'est ce qui permet de
+// chercher les battants sans connaître encore l'échelle (voir echelleAuto).
+function detecterPortes(drawings, clip, ptPerM, large){
+  const RMIN=large?0.16:0.30, RMAX=large?5.6:1.40;
+  const RMIN2=large?0.18:0.35, RMAX2=large?5.4:1.35;
   const frags=[];
   // Les arcs se chaînent sur la géométrie, pas sur les sous-chemins : beaucoup
   // d'exports CAO écrivent chaque segment en « moveTo/lineTo » et dessinent les
@@ -1307,7 +1382,7 @@ function detecterPortes(drawings, clip, ptPerM){
       const f=fitCercle(ch);
       if(!f) continue;
       const [cx,cy,r,res]=f;
-      if(res>0.45 || r/ptPerM<0.3 || r/ptPerM>1.4) continue;
+      if(res>0.45 || r/ptPerM<RMIN || r/ptPerM>RMAX) continue;
       frags.push({cx,cy,r,ch});
     }
   }
@@ -1324,7 +1399,7 @@ function detecterPortes(drawings, clip, ptPerM){
     const f=fitCercle(g.pts);
     if(!f) continue;
     const [cx,cy,r,res]=f, rm=r/ptPerM;
-    if(res>0.7 || rm<0.35 || rm>1.35) continue;
+    if(res>0.7 || rm<RMIN2 || rm>RMAX2) continue;
     const [span,e1,e2]=arcInfo(g.pts,cx,cy);
     if(span<45 || span>200) continue;
     portes.push({x:Math.round(cx*10)/10, y:Math.round(cy*10)/10, r_m:Math.round(rm*100)/100,
@@ -1336,6 +1411,82 @@ function detecterPortes(drawings, clip, ptPerM){
   for(const p of portes)
     if(uniques.every(q=>Math.hypot(p.x-q.x,p.y-q.y)>0.6*ptPerM)) uniques.push(p);
   return uniques;
+}
+
+// ---- échelle déduite du plan ----
+// L'échelle était à saisir, et une erreur ici fausse toutes les surfaces et
+// toutes les longueurs de cloison. Un plan la porte pourtant deux fois : dans
+// son cartouche, et dans ses portes — un vantail fait 0,80 à 0,90 m partout.
+// On part de 1/100, on mesure le rayon des battants, on en déduit l'échelle, et
+// on recommence : trois tours suffisent à converger depuis n'importe où.
+// Une porte fait 30 à 36 pouces, soit 0,76 à 0,91 m — quinze pour cent de
+// marge. Les échelles usuelles, elles, s'échelonnent d'un quart en un quart :
+// on ne cherche donc pas l'échelle exacte, on désigne celle des échelles
+// courantes à laquelle les portes de ce plan ont une largeur de porte.
+const PORTE_M=0.87, PORTE_MIN=0.68, PORTE_MAX=1.15;
+const ECH_USUELLES=[20,25,33,50,75,100,125,150,200,250,300,500];
+function rayonMedianPortes(drawings, pw, ph){
+  const clip={x0:0, y0:0, x1:pw, y1:ph, w:pw, h:ph, contient:()=>true};
+  let ptPerM=2834.6457/100, n=0, rMed=0;
+  for(let tour=0;tour<4;tour++){
+    const P=detecterPortes(drawings, clip, ptPerM, true);
+    if(P.length<6) return {rMed:0, n:0};
+    // Les battants se ressemblent entre eux ; les autres arcs se dispersent. On
+    // prend donc le plus gros amas de rayons, pas la médiane de tout.
+    const rs=P.map(p=>p.r_m*ptPerM).sort((a,b)=>a-b);
+    let bi=0, bj=0;
+    for(let i=0;i<rs.length;i++){
+      let j=i; while(j+1<rs.length && rs[j+1]<=rs[i]*1.18) j++;
+      if(j-i>bj-bi){ bi=i; bj=j; }
+    }
+    const amas=rs.slice(bi,bj+1);
+    if(amas.length<5) return {rMed:0, n:0};
+    n=amas.length; rMed=amas[amas.length>>1];
+    const neuf=rMed/PORTE_M;
+    const fini=Math.abs(neuf-ptPerM)/ptPerM<0.01;
+    ptPerM=neuf;
+    if(fini) break;
+  }
+  return {rMed, n};
+}
+function echelleDeRayon(rMed){
+  let best=null, bd=1e9, second=1e9;
+  for(const v of ECH_USUELLES){
+    const larg=rMed/(2834.6457/v);
+    if(larg<PORTE_MIN||larg>PORTE_MAX) continue;
+    const d=Math.abs(Math.log(larg/PORTE_M));
+    if(d<bd){ second=bd; bd=d; best={ech:v, porte_m:Math.round(larg*100)/100}; }
+    else if(d<second) second=d;
+  }
+  if(!best) return null;
+  best.sure = second>bd*2.2;
+  return best;
+}
+function echelleAuto(drawings, pw, ph, words){
+  const cartouche=echelleCartouche(words);
+  const {rMed, n}=rayonMedianPortes(drawings, pw, ph);
+  if(!rMed) return {ech:null, n:0, cartouche};
+  const c=echelleDeRayon(rMed);
+  if(!c) return {ech:null, n, cartouche,
+                 hors:Math.round(rMed/(2834.6457/100)*100)/100};
+  return {ech:c.ech, porte_m:c.porte_m, sure:c.sure, n,
+          brut:Math.round(2834.6457/(rMed/PORTE_M)*10)/10,
+          cartouche, accord:cartouche==null || cartouche===c.ech};
+}
+
+// « 1:100 », « 1 / 50 » : ce que dit le cartouche, quand il est lisible.
+function echelleCartouche(words){
+  if(!words||!words.length) return null;
+  const txt=words.slice().sort((a,b)=>a.y-b.y||a.x0-b.x0).map(w=>w.s).join(' ');
+  const votes={};
+  const re=/\b1\s*[:\/]\s*(\d{2,4})\b/g;
+  let m;
+  while((m=re.exec(txt))){
+    const v=+m[1];
+    if(v>=10 && v<=1000) votes[v]=(votes[v]||0)+1;
+  }
+  const ks=Object.keys(votes).map(Number).sort((a,b)=>votes[b]-votes[a]);
+  return ks.length?ks[0]:null;
 }
 
 // ---- escaliers (volees de marches) ----
@@ -1705,13 +1856,30 @@ async function analyser(extr, finesse, echelle, progress){
   const sombres = drawings.filter(d=>sombre(d.rgb) && !d.dashed);
 
   await say('Tri des traits…');
+  // Les murs en aplat plein sont relevés d'abord : sur un plan entièrement
+  // poché, ce sont les seuls murs qu'il y ait, et c'est d'eux que le cadrage
+  // devra partir.
+  const poches = pochesDeMur(extr.drawings, ptPerM, polysDeTexte(extr.drawings));
   const segsWL = [];
   for(const d of sombres) for(const s of lignesUtiles(d))
     segsWL.push([d.w, Math.hypot(s[0]-s[2], s[1]-s[3])]);
-  if(!segsWL.length) throw new Error('Aucun trait détecté sur cette page (PDF scanné ou image ?)');
+  if(!segsWL.length && !poches.length)
+    throw new Error('Aucun trait détecté sur cette page (PDF scanné ou image ?)');
   // Le DXF donne lui-même le seuil : ses largeurs sont fabriquées d'après les
   // calques, il n'y a rien à deviner dans leur distribution.
-  let [murMin, noteSeuil] = extr.murMin ? [extr.murMin, null] : seuilMurs(segsWL, 0.45);
+  // Sur un plan poché, les murs sont les aplats : tout ce qui est au trait est
+  // du mobilier, des battants, des cotes. Abaisser le seuil de largeur, comme on
+  // le fait sur un plan au trait pour repêcher les cloisons fines, ferait ici
+  // passer une table pour un mur — on le remonte au contraire au-dessus du trait
+  // le plus gras, et les traits repassent tous par le tri des cloisons fines.
+  let murMin, noteSeuil=null;
+  if(extr.murMin) murMin=extr.murMin;
+  else if(poches.length>=8){
+    let wmax=0; for(const [w] of segsWL) if(w>wmax) wmax=w;
+    murMin=Math.round(Math.max(0.45, wmax*1.6)*100)/100;
+  }
+  else if(segsWL.length) [murMin, noteSeuil]=seuilMurs(segsWL, 0.45);
+  else murMin=0.45;
   const notes = noteSeuil ? [noteSeuil] : [];
 
   let xs=[], ys=[];
@@ -1719,6 +1887,7 @@ async function analyser(extr, finesse, echelle, progress){
     if(d.w < murMin) continue;
     for(const [x1,y1,x2,y2] of lignesUtiles(d)){ xs.push(x1,x2); ys.push(y1,y2); }
   }
+  for(const q of poches) for(const p of q.poly){ xs.push(p[0]); ys.push(p[1]); }
   if(!xs.length) throw new Error('Aucun trait de mur détecté (PDF non vectoriel ?)');
   const clip = {
     x0: Math.max(0, Math.min(...xs)-40), y0: Math.max(0, Math.min(...ys)-40),
@@ -1800,6 +1969,19 @@ async function analyser(extr, finesse, echelle, progress){
         if(L>=12){ trait(cv[1][1],3,x1,y1,x2,y2); trait(cv[2][1],3,x1,y1,x2,y2); }
       }
     }
+  }
+  // Le poché est peint tel quel, dans son épaisseur : c'est le mur lui-même, pas
+  // son axe. Son axe ne sert qu'aux linteaux, qui raisonnent sur des bouts de mur.
+  const remplir=(g,poly)=>{
+    g.fillStyle='#fff'; g.beginPath();
+    g.moveTo((poly[0][0]-clip.x0)*RSCALE,(poly[0][1]-clip.y0)*RSCALE);
+    for(let i=1;i<poly.length;i++)
+      g.lineTo((poly[i][0]-clip.x0)*RSCALE,(poly[i][1]-clip.y0)*RSCALE);
+    g.closePath(); g.fill();
+  };
+  for(const q of poches){
+    for(const k of [0,1,2,3]) remplir(cv[k][1], q.poly);
+    murs.push(q.axe);
   }
   const lire=c=>{
     const dd=c[1].getImageData(0,0,W,H).data, b=new Uint8Array(N);
@@ -1926,16 +2108,55 @@ async function analyser(extr, finesse, echelle, progress){
       if(c) tramePar[c]=(tramePar[c]||0)+1;
     }
 
-  const rooms={}; let k=0;
+  // L'étiquette est posée sur son nom, et à défaut sur son numéro ; il arrive
+  // que le point tombe sur un mur, dans une échancrure, ou dans le cadre tracé
+  // autour du numéro — qui est une cellule à lui tout seul, bien trop petite
+  // pour être un local. On cherche donc la cellule de taille de pièce la plus
+  // proche, et jamais une autre.
+  const piece=new Uint8Array(cc.n+2);
+  for(const c of comps) piece[c]=1;
+  const cellule=(x,y,rmax)=>{
+    const px=Math.round((x-clip.x0)*RSCALE), py=Math.round((y-clip.y0)*RSCALE);
+    if(px<0||py<0||px>=W||py>=H) return 0;
+    const ici=lab[py*W+px];
+    if(ici && piece[ici]) return ici;
+    for(let r=1;r<=rmax;r++)
+      for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
+        if(Math.max(Math.abs(dx),Math.abs(dy))!==r) continue;
+        const u=px+dx, v=py+dy;
+        if(u<0||v<0||u>=W||v>=H) continue;
+        const L=lab[v*W+u];
+        if(L && piece[L]) return L;
+      }
+    return 0;
+  };
+  const etiq=etiquettes(extr.words);
+  const parCell={};
+  const RCELL=Math.round(0.8*ptPerM*RSCALE);
+  for(const e of etiq){
+    let c=clip.contient(e.x,e.y) ? cellule(e.x, e.y, RCELL) : 0;
+    if(!c && e.xn!=null && clip.contient(e.xn,e.yn)) c=cellule(e.xn, e.yn, RCELL);
+    if(!c) continue;
+    if(!parCell[c] || e.rang>parCell[c].rang) parCell[c]=e;
+  }
+
+  const rooms={}; let k=0, nEtiq=0;
   for(const c of comps){
     const adet=Math.round(cc.areas[c]/pxPerM2*10)/10;
-    if(filtreTrame && (tramePar[c]||0) < Math.max(2, adet*0.15)) continue;
-    const ws=(texte[c]||[]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
-    let nom=ws.map(w=>w[2]).join(' ').slice(0,45).trim();
-    let num=null;
-    for(const w of ws) if(/^\d{1,4}(-\d+)?$/.test(w[2])){ num=w[2]; break; }
-    const m=nom.match(/(\d+(?:[.,]\d+)?)\s*m/);
-    const adecl=m?parseFloat(m[1].replace(',','.')):null;
+    const et=parCell[c];
+    // une étiquette suffit à prouver le local : la trame de sol ne tranche plus
+    if(filtreTrame && !et && (tramePar[c]||0) < Math.max(2, adet*0.15)) continue;
+    let nom, num=null, adecl=null;
+    if(et){
+      nEtiq++;
+      nom=et.nom; num=et.num; adecl=et.aire;
+      if(!nom) nom='Local '+et.num;
+    } else {
+      const ws=(texte[c]||[]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+      nom=ws.map(w=>w[2]).join(' ').slice(0,45).trim();
+      for(const w of ws) if(/^\d{1,4}(-\d+)?$/.test(w[2])){ num=w[2]; break; }
+      adecl=surfaceDe(nom);
+    }
     if(!nom){
       // Un local sans étiquette lisible reste un local. Le seuil d'avant
       // (12 m²) jetait les bureaux, sanitaires et rangements de tous les plans
@@ -2050,6 +2271,26 @@ async function analyser(extr, finesse, echelle, progress){
     else pt.pair=null;
   }
 
+  // Contrôle d'échelle gratuit : les battants sont déjà là. Un vantail fait
+  // 0,80 à 0,90 m ; si le rayon médian s'en écarte franchement, c'est l'échelle
+  // saisie qui est fausse, et toutes les surfaces avec elle.
+  let echSug=null;
+  if(portes.length>=6){
+    const rs=portes.map(p=>p.r_m).sort((a,b)=>a-b);
+    const rm=rs[rs.length>>1];
+    const c=rm>0.1 ? echelleDeRayon(rm*ptPerM) : null;
+    if(c && c.ech!==echelle && c.sure){
+      echSug={ech:c.ech, porte_m:c.porte_m, large_m:Math.round(rm*100)/100,
+              n:portes.length};
+      notes.push('à 1/'+echelle+' les portes feraient '+(Math.round(rm*100)/100)+
+        ' m : l’échelle serait plutôt 1/'+c.ech);
+    }
+  }
+  if(poches.length) notes.push(poches.length+' murs en aplat plein relevés');
+  if(nEtiq) notes.push(nEtiq+' locaux nommés par leur étiquette');
+  if(extr.diag && extr.diag.lus)
+    notes.push('libellés lus par reconnaissance de forme ('+
+      extr.diag.lus.glyphes+' glyphes)');
   let stats=Object.keys(rooms).length+' pièces · '+pairs.length+' cloisons · '+
     portes.length+' portes · '+nEsc+" cages d'escalier · murs >= "+murMin+' pt';
   if(notes.length) stats+=' · '+notes.join(' · ');
@@ -2061,12 +2302,13 @@ async function analyser(extr, finesse, echelle, progress){
   if(typeof window!=='undefined' && window.__MOTEUR_DBG)
     window.__MOTEUR_DBG({W, H, RSCALE, clip:{x0:clip.x0, y0:clip.y0, w:clip.w, h:clip.h},
       ptPerM, murMin, mask, wallpix, murpix, barr, hull, closed, lab, rooms, linteaux,
-      pxPerM2, aires:cc.areas, filtreTrame, tramePar,
+      pxPerM2, aires:cc.areas, filtreTrame, tramePar, poches, etiq, nEtiq,
       nFins:fins.length, nTrame:trame.size, nCloisonsFines:cloisonsFines.size});
 
   return {clip:[clip.x0,clip.y0,clip.x1,clip.y1], rooms, pairs, polys, portes,
           matrix:RULES.matrice_stc, cats:Object.keys(RULES.categories),
-          vision_note:stats, echelle, finesse};
+          vision_note:stats, echelle, finesse, ech_suggeree:echSug,
+          lus:(extr.diag && extr.diag.lus)||null};
 }
 
 // ---- diagnostic commun : ce que le moteur saura faire de la page ----
@@ -2078,17 +2320,14 @@ const SEUIL_IMG = 0.5;     // part de la page couverte par une seule image
 
 function diagnostic(cpt, nMots){
   const seg = cpt.seg|0, aplat = cpt.aplat|0, couv = cpt.couvImg||0;
+  const gly = cpt.glyphes|0;
   let niveau;
   if(seg < SEUIL_SEG && couv >= SEUIL_IMG) niveau = 'image';
   else if(seg < SEUIL_SEG) niveau = 'vide';
+  else if(vautLireGlyphes(cpt, nMots)) niveau = 'vectorise';
   else if(nMots < SEUIL_MOTS) niveau = 'sansTexte';
   else niveau = 'vectoriel';
-  // Le moteur ne lit que les traits : des murs dessinés en aplat plein
-  // (poché) passeraient pour du vectoriel sans jamais donner de cloison.
-  const note = (niveau !== 'image' && aplat > Math.max(300, seg*2))
-    ? 'beaucoup d’aplats pleins : des murs en poché ne seraient pas lus'
-    : null;
-  return {niveau, seg, nMots, aplat, couvImg:couv, note};
+  return {niveau, seg, nMots, aplat, glyphes:gly, couvImg:couv, note:null};
 }
 
 // ---- extraction pdf.js ----
@@ -2103,8 +2342,9 @@ async function balayerPDF(pdfPage, leger){
                     m[0]*n[4]+m[2]*n[5]+m[4], m[1]*n[4]+m[3]*n[5]+m[5]];
   const ap=(m,x,y)=>[m[0]*x+m[2]*y+m[4], m[1]*x+m[3]*y+m[5]];
   const stack=[]; let ctm=vp.transform.slice(), lw=1, rgb=[0,0,0], dashed=false;
+  let frgb=[0,0,0];
   const drawings=[];
-  const cpt={seg:0, aplat:0, couvImg:0};
+  const cpt={seg:0, aplat:0, couvImg:0, glyphes:0};
   const airePage=(vp.width*vp.height)||1;
   // pdf.js rend le chemin AVANT les operateurs d'etat quand le flux les place
   // entre la construction et la peinture : on garde le chemin de cote et on le
@@ -2114,34 +2354,81 @@ async function balayerPDF(pdfPage, leger){
     if(!attente) return;
     const {subs, co, ctm:m}=attente; attente=null;
     const sc=Math.sqrt(Math.abs(m[0]*m[3]-m[1]*m[2]))||1;
-    const d={type, w:lw*sc, rgb:rgb.slice(), dashed, items:[]};
+    // Un aplat n'a pas de segment à offrir : ce sont ses contours fermés qui
+    // portent l'information — un mur poché, un glyphe vectorisé. On les retient
+    // en parallèle des segments, pour que le même parcours serve aux deux.
+    const plein=type==='f';
+    const d={type, w:lw*sc, rgb:(plein?frgb:rgb).slice(), dashed, items:[]};
+    if(plein) d.polys=[];
     const px=(x,y)=>[m[0]*x+m[2]*y+m[4], m[1]*x+m[3]*y+m[5]];
-    let kk=0, cur=null, start=null;
+    let kk=0, cur=null, start=null, poly=null;
+    const ouvrir=p=>{ if(plein){ poly=[p]; d.polys.push(poly); } };
+    const suivre=p=>{ if(poly) poly.push(p); };
+    // les courbes ne sont développées que pour les aplats : c'est là que leur
+    // forme compte (la panse d'un « a »), et seulement là qu'on la paiera
+    const courbe=(p0,p1,p2,p3)=>{
+      if(!poly) return;
+      if(!p0){ suivre(p3); return; }
+      for(let t=1;t<=4;t++){ const u=t/4, v=1-u;
+        suivre([v*v*v*p0[0]+3*v*v*u*p1[0]+3*v*u*u*p2[0]+u*u*u*p3[0],
+                v*v*v*p0[1]+3*v*v*u*p1[1]+3*v*u*u*p2[1]+u*u*u*p3[1]]); }
+    };
     for(const s of subs){
-      if(s===O.moveTo){ cur=px(co[kk],co[kk+1]); kk+=2; start=cur; d.items.push(null); }
+      if(s===O.moveTo){ cur=px(co[kk],co[kk+1]); kk+=2; start=cur; d.items.push(null); ouvrir(cur); }
       else if(s===O.lineTo){
         const p2=px(co[kk],co[kk+1]); kk+=2;
         if(cur) d.items.push([cur[0],cur[1],p2[0],p2[1]]);
-        cur=p2;
+        suivre(p2); cur=p2;
       }
-      else if(s===O.curveTo){ cur=px(co[kk+4],co[kk+5]); kk+=6; d.items.push(null); }
-      else if(s===O.curveTo2||s===O.curveTo3){ cur=px(co[kk+2],co[kk+3]); kk+=4; d.items.push(null); }
-      else if(s===O.closePath){ if(cur&&start) d.items.push([cur[0],cur[1],start[0],start[1]]); cur=start; }
-      else if(s===O.rectangle){ kk+=4; d.items.push(null); }
+      else if(s===O.curveTo){
+        const p1=px(co[kk],co[kk+1]), p2=px(co[kk+2],co[kk+3]), p3=px(co[kk+4],co[kk+5]);
+        kk+=6; courbe(cur,p1,p2,p3); cur=p3; d.items.push(null);
+      }
+      else if(s===O.curveTo2){
+        const p2=px(co[kk],co[kk+1]), p3=px(co[kk+2],co[kk+3]);
+        kk+=4; courbe(cur,cur||p2,p2,p3); cur=p3; d.items.push(null);
+      }
+      else if(s===O.curveTo3){
+        const p1=px(co[kk],co[kk+1]), p3=px(co[kk+2],co[kk+3]);
+        kk+=4; courbe(cur,p1,p3,p3); cur=p3; d.items.push(null);
+      }
+      else if(s===O.closePath){ if(cur&&start) d.items.push([cur[0],cur[1],start[0],start[1]]);
+                                cur=start; if(start) suivre(start); }
+      else if(s===O.rectangle){
+        // Un mur dessiné en rectangle ne donnait aucun segment, même au trait :
+        // on le développe en ses quatre côtés.
+        const rx=co[kk], ry=co[kk+1], rw=co[kk+2], rh=co[kk+3]; kk+=4;
+        const q=[px(rx,ry), px(rx+rw,ry), px(rx+rw,ry+rh), px(rx,ry+rh)];
+        for(let t=0;t<4;t++){ const a=q[t], b=q[(t+1)%4]; d.items.push([a[0],a[1],b[0],b[1]]); }
+        ouvrir(q[0]); suivre(q[1]); suivre(q[2]); suivre(q[3]); suivre(q[0]);
+        cur=q[0]; start=q[0];
+      }
+    }
+    if(plein){
+      if(!d.polys.length) return;
+      cpt.aplat++;
+      cpt.glyphes+=tailleDeGlyphe(d.polys);
+      if(!leger) drawings.push(d);
+      return;
     }
     let n=0; for(const x of d.items) if(x) n++;
     if(n){ cpt.seg+=n; if(!leger) drawings.push(d); }
   };
   for(let i=0;i<F.length;i++){
     const f=F[i];
-    if(f===O.save) stack.push([ctm.slice(),lw,rgb.slice(),dashed]);
-    else if(f===O.restore){ const s=stack.pop(); if(s){ ctm=s[0]; lw=s[1]; rgb=s[2]; dashed=s[3]; } }
+    if(f===O.save) stack.push([ctm.slice(),lw,rgb.slice(),dashed,frgb.slice()]);
+    else if(f===O.restore){ const s=stack.pop();
+      if(s){ ctm=s[0]; lw=s[1]; rgb=s[2]; dashed=s[3]; frgb=s[4]||frgb; } }
     else if(f===O.transform) ctm=mul(ctm,A[i]);
     else if(f===O.setLineWidth) lw=A[i][0];
     else if(f===O.setStrokeRGBColor){ const c=A[i]; rgb=[c[0],c[1],c[2]]; }
     else if(f===O.setStrokeGray){ const g=Math.round(A[i][0]*255); rgb=[g,g,g]; }
     else if(f===O.setStrokeCMYKColor){ const [c1,m1,y1,k1]=A[i];
       rgb=[255*(1-Math.min(1,c1+k1)),255*(1-Math.min(1,m1+k1)),255*(1-Math.min(1,y1+k1))]; }
+    else if(f===O.setFillRGBColor){ const c=A[i]; frgb=[c[0],c[1],c[2]]; }
+    else if(f===O.setFillGray){ const g=Math.round(A[i][0]*255); frgb=[g,g,g]; }
+    else if(f===O.setFillCMYKColor){ const [c1,m1,y1,k1]=A[i];
+      frgb=[255*(1-Math.min(1,c1+k1)),255*(1-Math.min(1,m1+k1)),255*(1-Math.min(1,y1+k1))]; }
     else if(f===O.setDash) dashed=!!(A[i][0]&&A[i][0].length);
     else if(f===O.paintImageXObject||f===O.paintInlineImageXObject||
             f===O.paintImageXObjectRepeat){
@@ -2153,39 +2440,442 @@ async function balayerPDF(pdfPage, leger){
     else if(f===O.stroke||f===O.closeStroke) finir('s');
     else if(f===O.fillStroke||f===O.eoFillStroke||
             f===O.closeFillStroke||f===O.closeEOFillStroke) finir('fs');
-    else if(f===O.fill||f===O.eoFill){ if(attente){ cpt.aplat++; attente=null; } }
+    else if(f===O.fill||f===O.eoFill) finir('f');
     else if(f===O.endPath) attente=null;
   }
   return {drawings, cpt, vp};
 }
 
+// Le texte pivoté était jeté (`|tr[1]|>0.01`) : sur un plan, c'est le nom d'un
+// local sur une gaine verticale, une légende de coupe, un repère de menuiserie.
+// On le garde, en posant chaque mot le long de sa propre direction d'écriture.
 function motsPDF(tc, vp){
   const ap=(m,x,y)=>[m[0]*x+m[2]*y+m[4], m[1]*x+m[3]*y+m[5]];
   const words=[];
   for(const it of tc.items){
     if(!it.str||!it.str.trim()) continue;
     const tr=it.transform;
-    if(Math.abs(tr[1])>0.01) continue;
+    const na=Math.hypot(tr[0],tr[1])||1, nc=Math.hypot(tr[2],tr[3])||1;
+    const dx=tr[0]/na, dy=tr[1]/na;          // direction d'écriture
+    const mx=tr[2]/nc, my=tr[3]/nc;          // montante du texte
+    const h=it.height||0;
     const parts=it.str.split(/\s+/).filter(x=>x);
     const total=Math.max(1,it.str.length);
     let off=0;
     for(const w of parts){
       const idx=it.str.indexOf(w,off); off=idx+w.length;
       const ww=it.width*w.length/total;
-      const ux=tr[4]+it.width*(idx+w.length/2)/total;
-      const uy=tr[5]+(it.height||0)*0.35;
-      const p=ap(vp.transform,ux,uy);
-      words.push({x:p[0], y:p[1], x0:p[0]-ww/2, y0:p[1]-(it.height||0)/2, s:w});
+      const le=it.width*(idx+w.length/2)/total;
+      const p=ap(vp.transform, tr[4]+dx*le+mx*h*0.35, tr[5]+dy*le+my*h*0.35);
+      words.push({x:p[0], y:p[1], x0:p[0]-ww/2, x1:p[0]+ww/2, y0:p[1]-h/2, s:w, h,
+                  pivote:Math.abs(tr[1])>0.01});
     }
   }
   return words;
 }
 
+// ============ lecture des libellés vectorisés (glyphes en aplat) ============
+// Beaucoup d'exports CAO convertissent les textes en tracés : getTextContent ne
+// rend plus rien, et tous les locaux sortaient « Espace non identifié ». Les
+// lettres sont pourtant là, en aplats sombres de la taille d'un caractère. On
+// les reconnaît par leur forme, comparée à un alphabet que le navigateur dessine
+// lui-même — rien à embarquer, et les plans d'architecte sont presque toujours
+// lettrés dans une linéale proche d'Arial.
+const GLY_H_MIN=0.6, GLY_H_MAX=14, GLY_W_MAX=20, SIGN=16;
+
+function bbPolys(polys){
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const p of polys) for(const q of p){
+    if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0];
+    if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1];
+  }
+  return [x0,y0,x1,y1];
+}
+
+// Compte les contours de taille de caractère : sert au diagnostic, qui balaie
+// toutes les pages et n'a pas les moyens d'en faire plus.
+function tailleDeGlyphe(polys){
+  let n=0;
+  for(const p of polys){
+    const [x0,y0,x1,y1]=bbPolys([p]);
+    const w=x1-x0, h=y1-y0;
+    if(h>=GLY_H_MIN && h<=GLY_H_MAX && w<=GLY_W_MAX && w>=0.15) n++;
+  }
+  return n;
+}
+
+// Un aplat peut porter une lettre (avec ses contre-formes : « o », « é ») ou
+// toute une ligne de texte d'un coup. On sépare ses contours en lettres :
+// deux contours qui se recouvrent en x et vivent sur la même ligne sont le même
+// caractère — le point du « i », l'accent du « é », l'îlot du « o ».
+function groupesDeGlyphes(drawings){
+  const out=[];
+  for(const d of drawings){
+    if(d.type!=='f' || !d.polys || !d.polys.length || !sombre(d.rgb)) continue;
+    const bbs=d.polys.map(p=>bbPolys([p]));
+    const n=bbs.length, par=bbs.map((_,i)=>i);
+    const trouve=i=>{ while(par[i]!==i) i=par[i]=par[par[i]]; return i; };
+    for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
+      const a=bbs[i], b=bbs[j];
+      const ha=a[3]-a[1], hb=b[3]-b[1], hh=Math.max(ha,hb,0.1);
+      const recX=Math.min(a[2],b[2])-Math.max(a[0],b[0]);
+      const ecY=Math.max(a[1],b[1])-Math.min(a[3],b[3]);
+      if(recX>-0.05 && ecY<hh*0.6){ const ra=trouve(i), rb=trouve(j); if(ra!==rb) par[ra]=rb; }
+    }
+    const paquets=new Map();
+    for(let i=0;i<n;i++){ const r=trouve(i);
+      if(!paquets.has(r)) paquets.set(r,[]);
+      paquets.get(r).push(d.polys[i]); }
+    for(const polys of paquets.values()){
+      const bb=bbPolys(polys), w=bb[2]-bb[0], h=bb[3]-bb[1];
+      if(h<GLY_H_MIN||h>GLY_H_MAX||w>GLY_W_MAX||w<0.15) continue;
+      out.push({polys, x0:bb[0], y0:bb[1], x1:bb[2], y1:bb[3], w, h});
+    }
+  }
+  return out;
+}
+
+// --- la vignette de comparaison, et ce qu'elle ne dit pas ---
+// La vignette étire la boîte englobante du glyphe : elle garde la forme au
+// mieux, mais efface la taille — un « M » y ressemble à un point, un « H » à un
+// « n », un « i » à un « l ». On lui adjoint donc trois mesures, prises dans les
+// métriques de la ligne : jusqu'où le glyphe monte au-dessus du pied, jusqu'où
+// il descend dessous, et sa largeur. Elles se comparent aux mêmes mesures de
+// l'alphabet de référence, et pèsent autant qu'une trentaine de pixels.
+const P_HAUT=45, P_BAS=45, P_LARG=18;
+
+// Hauteur de capitale d'une ligne : la plupart des lettres montent à la hauteur
+// d'x, les capitales et les hampes à la hauteur de capitale, un accent au-delà.
+// On prend donc le haut de la distribution, un cran sous le maximum — de quoi
+// laisser passer un accent isolé sans se laisser tromper par lui.
+function capDeRang(R){
+  const hs=R.gs.map(o=>R.base-o.q.y0).sort((a,b)=>b-a);
+  const i=Math.min(hs.length-1, Math.floor(hs.length*0.12));
+  return Math.max(0.3, hs[i]);
+}
+
+// Alphabet de référence : chaque caractère est dessiné par le navigateur, puis
+// ramené à la même vignette que les glyphes du plan. Construit une fois par
+// session.
+// Ni « ° » ni « ² » : une fois ramenés à la même vignette, ils sont le « 0 » et
+// le « 2 », qu'ils raflaient — et un numéro de local devenait illisible. Le
+// « m² » se lit très bien sans, l'exposant tombant sur sa propre ligne.
+const REF_CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'+
+  '0123456789'+'ÀÂÇÉÈÊËÎÏÔÙÛàâçéèêëîïôùû'+'-.,\'’()/&+:%';
+let _refAlpha=null;
+function alphabetRef(){
+  if(_refAlpha) return _refAlpha;
+  const B=220, BASE=170, TAILLE=110;
+  const c=document.createElement('canvas'); c.width=B; c.height=B;
+  const g=c.getContext('2d',{willReadFrequently:true});
+  const police='Arial, Helvetica, sans-serif';
+  const encre=ch=>{
+    g.clearRect(0,0,B,B); g.fillStyle='#000';
+    g.textBaseline='alphabetic'; g.font=TAILLE+'px '+police;
+    g.fillText(ch, 20, BASE);
+    const dd=g.getImageData(0,0,B,B).data;
+    let x0=1e9,y0=1e9,x1=-1,y1=-1;
+    for(let y=0;y<B;y++) for(let x=0;x<B;x++) if(dd[(y*B+x)*4+3]>=110){
+      if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+    return x1<0 ? null : [x0,y0,x1+1,y1+1];
+  };
+  const capH=(()=>{ const e=encre('H'); return e ? BASE-e[1] : TAILLE*0.716; })();
+  const v=document.createElement('canvas'); v.width=SIGN; v.height=SIGN;
+  const gv=v.getContext('2d',{willReadFrequently:true});
+  const refs=[];
+  for(const ch of REF_CHARS){
+    const e=encre(ch);
+    if(!e) continue;
+    const w=e[2]-e[0], h=e[3]-e[1], k=Math.min((SIGN-2)/w,(SIGN-2)/h);
+    gv.clearRect(0,0,SIGN,SIGN);
+    gv.drawImage(c, e[0],e[1],w,h, 1+((SIGN-2)-w*k)/2, 1+((SIGN-2)-h*k)/2, w*k, h*k);
+    const dv=gv.getImageData(0,0,SIGN,SIGN).data, b=new Uint8Array(SIGN*SIGN);
+    for(let i=0;i<SIGN*SIGN;i++) b[i]=dv[i*4+3]>=110?1:0;
+    // Le rare se paie un peu plus cher : assez pour qu'il ne rafle plus le
+    // commun, pas assez pour qu'un vrai accent se perde — sa marque au-dessus de
+    // la lettre se voit de loin.
+    const acc=ch!==ch.normalize('NFD').replace(/[̀-ͯ]/g,'');
+    refs.push({ch, b, haut:(BASE-e[1])/capH, bas:(e[3]-BASE)/capH, larg:w/capH,
+               pen: acc?10:(/[A-Za-z0-9]/.test(ch)?0:5)});
+  }
+  _refAlpha=refs;
+  return refs;
+}
+
+// Les vignettes sont dessinées d'un bloc, en damier, pour ne relire le canvas
+// qu'une fois : un getImageData par glyphe coûtait plus cher que tout le reste.
+function signaturesDe(groupes){
+  const PAR=64, lignes=Math.ceil(groupes.length/PAR);
+  const c=document.createElement('canvas');
+  c.width=PAR*SIGN; c.height=Math.max(1,lignes)*SIGN;
+  const g=c.getContext('2d',{willReadFrequently:true});
+  g.fillStyle='#000';
+  groupes.forEach((q,i)=>{
+    const ox=(i%PAR)*SIGN, oy=Math.floor(i/PAR)*SIGN;
+    const k=Math.min((SIGN-2)/(q.w||0.1),(SIGN-2)/(q.h||0.1));
+    const ax=ox+1+((SIGN-2)-q.w*k)/2, ay=oy+1+((SIGN-2)-q.h*k)/2;
+    g.beginPath();
+    for(const p of q.polys){
+      if(p.length<2) continue;
+      g.moveTo(ax+(p[0][0]-q.x0)*k, ay+(p[0][1]-q.y0)*k);
+      for(let j=1;j<p.length;j++) g.lineTo(ax+(p[j][0]-q.x0)*k, ay+(p[j][1]-q.y0)*k);
+      g.closePath();
+    }
+    g.fill('evenodd');
+  });
+  const d=g.getImageData(0,0,c.width,c.height).data, W=c.width;
+  return groupes.map((q,i)=>{
+    const ox=(i%PAR)*SIGN, oy=Math.floor(i/PAR)*SIGN, b=new Uint8Array(SIGN*SIGN);
+    for(let y=0;y<SIGN;y++) for(let x=0;x<SIGN;x++)
+      b[y*SIGN+x]=d[(((oy+y)*W)+ox+x)*4+3]>=110?1:0;
+    return b;
+  });
+}
+
+// Regroupement par ligne de pied, sans condition de voisinage : les libellés
+// sont recoupés ensuite, sur les trous horizontaux. Sert aussi à reconnaître ce
+// qui est du texte — trois glyphes alignés sur le même pied — et donc à ne pas
+// prendre un « I » capital pour un bout de mur poché.
+function rangsDe(groupes){
+  const G=groupes.map((q,i)=>({q, i})).sort((a,b)=>a.q.y1-b.q.y1);
+  const rangs=[];
+  for(const o of G){
+    const q=o.q;
+    let R=null;
+    for(let k=rangs.length-1;k>=0;k--){
+      const r=rangs[k];
+      if(q.y1-r.base>Math.max(1.0, r.h*0.30)) break;
+      if(Math.abs(r.base-q.y1)<=Math.max(0.9, r.h*0.30) &&
+         Math.abs(r.h-q.h)<Math.max(1.6, r.h*0.75)){ R=r; break; }
+    }
+    if(!R){ R={base:q.y1, h:q.h, gs:[]}; rangs.push(R); }
+    R.gs.push(o);
+    R.h=Math.max(R.h,q.h);
+    R.base=(R.base*(R.gs.length-1)+q.y1)/R.gs.length;
+  }
+  // La ligne de pied se prend à la médiane, non à la moyenne : quelques jambages
+  // descendants (p, g, y) tirent une moyenne sous le pied, et toutes les
+  // hauteurs mesurées ensuite avec elle.
+  for(const R of rangs){
+    const ys=R.gs.map(o=>o.q.y1).sort((a,b)=>a-b);
+    R.base=ys[ys.length>>1];
+  }
+  return rangs;
+}
+
+// Contours qui appartiennent à du texte vectorisé : à retirer des candidats
+// murs pochés, sous peine de prendre chaque jambage de lettre pour une cloison.
+function polysDeTexte(drawings){
+  const set=new Set();
+  const groupes=groupesDeGlyphes(drawings);
+  if(groupes.length<12) return set;
+  for(const R of rangsDe(groupes))
+    if(R.gs.length>=3) for(const o of R.gs) for(const p of o.q.polys) set.add(p);
+  return set;
+}
+
+function lireGlyphes(drawings){
+  const groupes=groupesDeGlyphes(drawings);
+  if(groupes.length<20) return {words:[], lignes:[], n:groupes.length, conf:0};
+  const rangs=rangsDe(groupes);
+  // chaque glyphe est mesuré dans les métriques de sa ligne, pas dans les siennes
+  const metriques=new Array(groupes.length);
+  for(const R of rangs){
+    const capH=capDeRang(R);
+    for(const o of R.gs)
+      metriques[o.i]={haut:(R.base-o.q.y0)/capH, bas:(o.q.y1-R.base)/capH,
+                      larg:o.q.w/capH};
+  }
+  const refs=alphabetRef(), sigs=signaturesDe(groupes);
+  const lire=i=>{
+    const b=sigs[i], m=metriques[i];
+    let ch='?', bd=1e9;
+    for(const r of refs){
+      let n=0; for(let k=0;k<b.length;k++) if(b[k]!==r.b[k]) n++;
+      const d=n+r.pen+P_HAUT*Math.abs(m.haut-r.haut)+P_BAS*Math.abs(m.bas-r.bas)+
+              P_LARG*Math.abs(m.larg-r.larg);
+      if(d<bd){ bd=d; ch=r.ch; }
+    }
+    return [ch, bd];
+  };
+  const lignes=[]; let somme=0, nCar=0;
+  for(const R of rangs){
+    R.gs.sort((a,b)=>a.q.x0-b.q.x0);
+    // un même pied porte plusieurs libellés d'un bout à l'autre de la planche :
+    // on coupe sur les trous larges
+    let bloc=[];
+    const vider=()=>{
+      if(!bloc.length){ return; }
+      const hmax=Math.max(...bloc.map(o=>o.q.h));
+      // Le blanc entre deux mots se juge sur les trous de ce bloc-là : un mot de
+      // chiffres respire deux fois plus qu'un mot de lettres, et « 11 m² »
+      // sortait « 1 1 m » — donc une surface de 1 m².
+      const trous=[];
+      for(let i=1;i<bloc.length;i++) trous.push(bloc[i].q.x0-bloc[i-1].q.x1);
+      const tri=trous.slice().sort((a,b)=>a-b);
+      const med=tri.length?tri[tri.length>>1]:0;
+      const seuil=tri.length>=5 ? Math.max(0.30*hmax, 1.8*med) : 0.32*hmax;
+      let s='', prev=null, d=0;
+      for(const o of bloc){
+        if(prev && o.q.x0-prev.q.x1 > seuil) s+=' ';
+        const [ch,dd]=lire(o.i);
+        s+=ch; d+=dd; prev=o;
+      }
+      const x0=bloc[0].q.x0, x1=bloc[bloc.length-1].q.x1;
+      somme+=d; nCar+=bloc.length;
+      lignes.push({s:reparerBarres(s.trim()), x0, x1, base:R.base, h:hmax,
+                   d:d/bloc.length, n:bloc.length});
+      bloc=[];
+    };
+    for(const o of R.gs){
+      if(bloc.length && o.q.x0-bloc[bloc.length-1].q.x1 > hmax_(bloc)*1.6) vider();
+      bloc.push(o);
+    }
+    vider();
+  }
+  // une ligne trop mal reconnue est du bruit graphique pris pour du texte
+  const bonnes=lignes.filter(L=>L.d<70 && L.s.length);
+  const words=[];
+  for(const L of bonnes)
+    for(const m of decouperMots(L))
+      words.push(m);
+  return {words, lignes:bonnes, n:groupes.length,
+          conf: nCar ? Math.round(somme/nCar) : 0};
+}
+function hmax_(bloc){ let h=0; for(const o of bloc) if(o.q.h>h) h=o.q.h; return h; }
+
+// Le « l » et le « I » ont, dans une linéale, exactement le même dessin : une
+// barre. Aucune forme ne les sépare — mais leur place dans le mot, si. Une barre
+// qui suit une minuscule est un « l » ; en tête de mot, c'est un « I ».
+// « SaIIe de r�unIon » redevient « Salle de réunion », ce qui compte autant pour
+// l'œil que pour la classification acoustique.
+function reparerBarres(s){
+  const min='abcdefghijklmnopqrstuvwxyzàâçéèêëîïôùû';
+  const t=s.split('');
+  for(let i=1;i<t.length;i++)
+    if(t[i]==='I' && min.includes(t[i-1])) t[i]='l';
+  return t.join('');
+}
+
+// Une ligne reconnue redonne des mots au même format que le texte du PDF :
+// le reste du moteur ne voit pas la différence.
+function decouperMots(L){
+  const out=[], parts=L.s.split(' ').filter(x=>x);
+  const total=Math.max(1,L.s.length);
+  let off=0;
+  for(const w of parts){
+    const idx=L.s.indexOf(w,off); off=idx+w.length;
+    const larg=L.x1-L.x0;
+    const xa=L.x0+larg*idx/total, xb=L.x0+larg*(idx+w.length)/total;
+    out.push({x:(xa+xb)/2, y:L.base-L.h*0.4, x0:xa, x1:xb, y0:L.base-L.h, s:w,
+              h:L.h, glyphe:true});
+  }
+  return out;
+}
+
+// ======== étiquettes de local : un numéro, le nom dessous, la surface ========
+// C'est la disposition de tous les plans d'architecte — sur ceux-ci, le numéro
+// est même encadré d'un rectangle de 25,6 × 11,3 pt. La lire en bloc vaut mieux
+// que de ramasser tous les mots tombés dans la cellule : les cotes, les repères
+// de menuiserie et les légendes de coupe n'entrent plus dans le nom du local.
+// Le bloc se lit de la même façon que le texte vienne du PDF ou des glyphes.
+function lignesDeMots(words){
+  const ws=words.filter(w=>w.s&&w.s.trim()).slice().sort((a,b)=>a.y-b.y||a.x0-b.x0);
+  const lignes=[];
+  for(const w of ws){
+    const h=w.h||4, x1=(w.x1!=null)?w.x1:(2*w.x-w.x0);
+    let L=null;
+    for(let k=lignes.length-1;k>=0;k--){
+      const r=lignes[k];
+      if(w.y-r.y>Math.max(1.4, r.h*0.6)) break;
+      if(Math.abs(r.y-w.y)<=Math.max(1.2, r.h*0.55) &&
+         w.x0>r.x1-Math.max(1,r.h*0.4) && w.x0-r.x1<Math.max(2.5, r.h*2.2)){ L=r; break; }
+    }
+    if(!L){ L={y:w.y, h, x0:w.x0, x1, mots:[]}; lignes.push(L); }
+    L.mots.push(w);
+    L.x1=Math.max(L.x1, x1); L.x0=Math.min(L.x0, w.x0); L.h=Math.max(L.h, h);
+    L.y=(L.y*(L.mots.length-1)+w.y)/L.mots.length;
+  }
+  for(const L of lignes) L.txt=L.mots.map(m=>m.s).join(' ').trim();
+  return lignes;
+}
+
+// Un numéro de local, une fois réparées les confusions de forme les plus
+// tenaces : le « 0 » et le « O », le « 1 » et le « l ».
+// Les chiffres respirent plus que les lettres : « 11 » sortait « 1 1 », et le
+// blanc n'est donc pas un séparateur fiable à l'intérieur d'un nombre. Seul un
+// tiret réellement lu sépare le local de son sous-local.
+function numeroDe(s){
+  const t=(s||'').trim();
+  if(!t || t.length>9 || !/\d/.test(t)) return null;
+  const u=t.replace(/[Oo]/g,'0').replace(/[lI|]/g,'1');
+  const m=u.match(/^(\d[\d\s]{0,4})\s*[-–—]\s*(\d[\d\s]{0,2})$/);
+  if(m) return m[1].replace(/\s/g,'')+'-'+m[2].replace(/\s/g,'');
+  const v=u.replace(/\s/g,'');
+  return /^\d{1,5}$/.test(v) ? v : null;
+}
+
+const RE_SURF=/(\d[\d\s]{0,4}(?:[.,]\d+)?)\s*m(?:[²2]|\s*c|$)/i;
+function surfaceDe(txt){
+  const m=(txt||'').match(RE_SURF);
+  if(!m) return null;
+  const v=parseFloat(m[1].replace(/\s/g,'').replace(',','.'));
+  return isFinite(v)?v:null;
+}
+function etiquettes(words){
+  const L=lignesDeMots(words).sort((a,b)=>a.y-b.y);
+  const out=[];
+  for(let i=0;i<L.length;i++){
+    const num=numeroDe(L[i].txt);
+    if(!num) continue;
+    const h=L[i].h, cx=(L[i].x0+L[i].x1)/2;
+    let nom='', aire=null, pris=0, ax=cx, ay=L[i].y;
+    for(let j=i+1;j<L.length && pris<3;j++){
+      const q=L[j], dy=q.y-L[i].y;
+      if(dy<h*0.3) continue;
+      if(dy>h*3.6) break;
+      if(Math.abs((q.x0+q.x1)/2-cx) > Math.max(h*7, (q.x1-q.x0)*0.75)) continue;
+      // Le « ² » de « 38 m² » tombe sur sa propre ligne, et se lit « 2 » : il
+      // passait pour le numéro du local, et « 38 m » pour sa surface. Un exposant
+      // est plus petit que la ligne qu'il coiffe ; un numéro de local, jamais.
+      if(q.h > h*1.25) continue;
+      pris++;
+      const sa=surfaceDe(q.txt);
+      if(sa!=null && aire==null) aire=sa;
+      if(!nom && sa==null && /[A-Za-zÀ-ÿ]{3}/.test(q.txt)){
+        nom=q.txt.slice(0,45).trim();
+        // Le numéro est encadré d'un rectangle tracé ; ce cadre est un mur pour
+        // le moteur. On accroche donc l'étiquette à son nom, qui, lui, est posé
+        // à même la pièce.
+        ax=(q.x0+q.x1)/2; ay=q.y;
+      }
+    }
+    if(!nom && aire==null) continue;      // un numéro seul est une cote, pas un local
+    out.push({num, nom, aire, x:ax, y:ay, xn:cx, yn:L[i].y, h,
+              rang:(nom?2:0)+(aire!=null?1:0)});
+  }
+  return out;
+}
+
+// Les glyphes ne sont lus que lorsque le texte du PDF ne couvre visiblement pas
+// la planche : inutile de payer la reconnaissance quand les libellés sont là.
+const SEUIL_GLY=60;
+function vautLireGlyphes(cpt, nMots){
+  return (cpt.glyphes|0)>=SEUIL_GLY && cpt.glyphes>3*nMots;
+}
+
 async function extraire(pdfPage){
   const b=await balayerPDF(pdfPage, false);
-  const words=motsPDF(await pdfPage.getTextContent(), b.vp);
-  return {drawings:b.drawings, words, pw:b.vp.width, ph:b.vp.height,
-          diag:diagnostic(b.cpt, words.length)};
+  let words=motsPDF(await pdfPage.getTextContent(), b.vp);
+  let gly=null;
+  if(vautLireGlyphes(b.cpt, words.length)){
+    gly=lireGlyphes(b.drawings);
+    words=words.concat(gly.words);
+  }
+  const diag=diagnostic(b.cpt, words.length);
+  if(gly && gly.words.length)
+    diag.lus={mots:gly.words.length, glyphes:gly.n, conf:gly.conf};
+  return {drawings:b.drawings, words, pw:b.vp.width, ph:b.vp.height, diag};
 }
 
 // Diagnostic seul : appelé après le rendu de la vignette, où pdf.js a déjà mis
@@ -2360,7 +3050,7 @@ function lireSVG(texte){
     if(!racine) throw new Error('SVG non rendu par le navigateur');
     const inv=racine.inverse();
     const drawings=[], words=[];
-    const cpt={seg:0, aplat:0, couvImg:0};
+    const cpt={seg:0, aplat:0, couvImg:0, glyphes:0};
     for(const im of live.querySelectorAll('image')){
       if(im.closest(HORS_RENDU)) continue;
       const m=im.getScreenCTM(); if(!m) continue;
@@ -2375,7 +3065,20 @@ function lireSVG(texte){
       if(cs.display==='none'||cs.visibility==='hidden'||parseFloat(cs.opacity||'1')===0) continue;
       const rgb=parseRGB(cs.stroke);
       if(!rgb || cs.stroke==='none' || parseFloat(cs.strokeOpacity||'1')===0){
-        if(cs.fill && cs.fill!=='none') cpt.aplat++;
+        // Aplat sans contour : un mur poché, ou un texte vectorisé à l'export.
+        // Même convention que le PDF — on garde ses contours fermés.
+        const frgb=parseRGB(cs.fill);
+        if(!frgb || cs.fill==='none' || parseFloat(cs.fillOpacity||'1')===0) continue;
+        cpt.aplat++;
+        const m1=el.getScreenCTM(); if(!m1) continue;
+        const q=inv.multiply(m1);
+        const d={type:'f', w:0, rgb:frgb, dashed:false, items:[], polys:[]};
+        for(const poly of polysDeForme(el)){
+          if(poly.length<3) continue;
+          d.polys.push(poly.map(([ux,uy])=>
+            [q.a*ux+q.c*uy+q.e, q.b*ux+q.d*uy+q.f]));
+        }
+        if(d.polys.length){ cpt.glyphes+=tailleDeGlyphe(d.polys); drawings.push(d); }
         continue;
       }
       const m0=el.getScreenCTM(); if(!m0) continue;
@@ -2407,7 +3110,6 @@ function lireSVG(texte){
       if(nchars!==brut.length) continue;                   // indices non fiables
       const m0=el.getScreenCTM(); if(!m0) continue;
       const m=inv.multiply(m0);
-      if(Math.abs(m.b)>0.01) continue;                     // texte tourné : ignoré
       let i=0;
       for(const mot of brut.split(' ')){
         if(!mot){ i++; continue; }
@@ -2426,10 +3128,28 @@ function lireSVG(texte){
         const cx=m.a*(x0+x1)/2+m.c*(y0+y1)/2+m.e;
         const cy=m.b*(x0+x1)/2+m.d*(y0+y1)/2+m.f;
         const gx=m.a*x0+m.c*y0+m.e, gy=m.b*x0+m.d*y0+m.f;
-        words.push({x:cx, y:cy, x0:gx, y0:gy, s:mot});
+        const hx=m.a*x1+m.c*y1+m.e, hy=m.b*x1+m.d*y1+m.f;
+        words.push({x:cx, y:cy, x0:Math.min(gx,hx), x1:Math.max(gx,hx),
+                    y0:Math.min(gy,hy), s:mot, h:Math.abs(hy-gy)||undefined,
+                    pivote:Math.abs(m.b)>0.01});
       }
     }
-    return {drawings, words, pw, ph, diag:diagnostic(cpt, words.length)};
+    // Un SVG dont les libellés ont été convertis en tracés se lit comme un PDF
+    // dans le même cas : par la forme de ses glyphes.
+    let sortie=words;
+    const diag=(()=>{
+      if(vautLireGlyphes(cpt, words.length)){
+        const gly=lireGlyphes(drawings);
+        if(gly.words.length){
+          sortie=words.concat(gly.words);
+          const d=diagnostic(cpt, sortie.length);
+          d.lus={mots:gly.words.length, glyphes:gly.n, conf:gly.conf};
+          return d;
+        }
+      }
+      return diagnostic(cpt, words.length);
+    })();
+    return {drawings, words:sortie, pw, ph, diag};
   } finally { host.remove(); }
 }
 
@@ -2834,6 +3554,7 @@ function fondDXF(G, clipArr, sc){
 }
 
 return {analyser, extraire, rendreFond, diagnostiquerPDF, diagnostic,
+        echelleAuto, etiquettes, lireGlyphes, pochesDeMur,
         lireSVG, fondSVG, scanDXF, choixCalques, geoDXF, fondDXF,
         fondImage, chargerImage, recadrer};
 })();
@@ -2853,10 +3574,14 @@ const acc={
 function statut(t, err){ acc.status.textContent=t; acc.status.className=err?'err':''; }
 
 // --- ce que le diagnostic promet, en clair ---
-const DIAG_LIB={vectoriel:['Vectoriel','ok'], sansTexte:['Sans texte','wrn'],
+const DIAG_LIB={vectoriel:['Vectoriel','ok'], vectorise:['Texte vectorisé','ok'],
+                sansTexte:['Sans texte','wrn'],
                 image:['Image','err'], vide:['Sans plan','err']};
 const DIAG_TXT={
   vectoriel:'Tracés et libellés lisibles : analyse complète.',
+  vectorise:'Tracés lisibles ; les libellés ont été convertis en dessin à '+
+    'l’export. Ils seront lus par reconnaissance de forme — attendez-vous à '+
+    'quelques lettres de travers dans les noms, à corriger d’un clic.',
   sansTexte:'Tracés lisibles mais aucun libellé exploitable — textes vectorisés à '+
     'l’export, ou police sans table Unicode. Les cloisons et les pièces seront '+
     'détectées ; les noms et numéros de locaux seront à saisir à la main.',
@@ -3052,8 +3777,10 @@ async function montrerSource(){
   document.getElementById('card_dxf').style.display=estDXF?'':'none';
   acc.params.style.display='';
   document.getElementById('echelle').disabled=!SRC.echelleLibre;
+  document.getElementById('btn_ech_auto').style.display=
+    (SRC.echelleLibre && SRC.analysable) ? '' : 'none';
   document.getElementById('ech_note').textContent=SRC.echelleLibre
-    ? 'Ou calibrez à l’écran en cliquant deux points d’une cote connue.'
+    ? 'Ou faites-la déduire des battants de porte, ou calibrez à l’écran sur une cote connue.'
     : 'Échelle donnée par les unités du DXF : rien à saisir ici.';
   if(estDXF) majCalquesDXF();
   DIAGS=new Array(SRC.nPages).fill(null);
@@ -3172,6 +3899,42 @@ function dxfUnites(v){
   SRC.unites=v||null; SRC.invalider(); majCalquesDXF(); rafraichirDXF();
 }
 
+// --- échelle déduite du plan ---
+// Le rayon d'un battant de porte vaut la largeur de la porte : 0,80 à 0,90 m
+// partout. C'est une mesure du plan, indépendante du cartouche — on donne donc
+// les deux, et on le dit quand ils divergent.
+async function detecterEchelle(){
+  if(!SRC||!SRC.analysable||!SRC.echelleLibre) return;
+  const b=document.getElementById('btn_ech_auto'), note=document.getElementById('ech_note');
+  b.disabled=true;
+  note.textContent='Recherche des battants de porte…';
+  try{
+    const extr=await SRC.extraire(pageChoisie);
+    const r=MOTEUR.echelleAuto(extr.drawings, extr.pw, extr.ph, extr.words);
+    if(!r.ech){
+      if(r.cartouche){
+        document.getElementById('echelle').value=r.cartouche;
+        note.textContent='Aucun battant de porte exploitable ; le cartouche annonce '+
+          '1/'+r.cartouche+', repris ici — à vérifier sur une cote.';
+      } else
+        note.textContent='Aucun battant de porte reconnu sur cette page : '+
+          'l’échelle reste à saisir, ou à calibrer sur une cote connue.';
+      return;
+    }
+    document.getElementById('echelle').value=r.ech;
+    let t='1/'+r.ech+' — à cette échelle, les '+r.n+' portes du plan font '+
+      fr(r.porte_m,2)+' m de large';
+    if(!r.sure) t+=' (mais 1/'+Math.round(r.brut)+' se défendrait aussi)';
+    if(r.cartouche==null) t+=' ; cartouche illisible.';
+    else if(r.accord) t+=' ; le cartouche dit la même chose.';
+    else t+=' ; attention, le cartouche annonce 1/'+r.cartouche+'.';
+    note.textContent=t;
+  }catch(e){
+    console.warn(e);
+    note.textContent='Échec de la détection : '+(e.message||e);
+  }finally{ b.disabled=false; }
+}
+
 const MOTS_FINESSE={1:'très fin',2:'très fin',3:'fin',4:'équilibré',5:'équilibré',
                     6:'large',7:'large',8:'très large',9:'très large'};
 function majFinesse(v){
@@ -3207,6 +3970,12 @@ async function lancerAnalyse(pageNo, finesse, echelle, suivi){
     payload.source=SRC.kind;
     ouvrirEditeur(payload, bg);
     dire('');
+    const es=payload.ech_suggeree;
+    if(es && SRC.echelleLibre)
+      toast('L’échelle saisie est peut-être fausse',
+        'À 1/'+echelle+', les '+es.n+' portes de ce plan feraient '+fr(es.large_m,2)+
+        ' m de large. À 1/'+es.ech+' elles feraient '+fr(es.porte_m,2)+' m — '+
+        'relancez l’analyse à cette échelle si c’est la bonne.', 'warn');
     return true;
   }catch(e){
     console.error(e);
@@ -3366,6 +4135,39 @@ function aimantePoint(x, y, autre, ctx, shift){
   return [x,y];
 }
 function roomInfo(c){ return D.rooms[c] || state.newRooms[c]; }
+
+// --- renommer un local détecté ---
+// Un nom lu sur des glyphes vectorisés garde parfois une lettre de travers, et
+// un numéro peut manquer son tiret : il faut pouvoir les reprendre. Le nom voyage
+// jusque dans les cloisons, les métrés et les exports — on le propage donc
+// partout, et on le garde dans l'état enregistré.
+function renommerPiece(c, champ, val){
+  const r=roomInfo(c);
+  if(!r) return;
+  const v=String(val==null?'':val).slice(0,60).trim();
+  if(champ==='num' && !v) return;                 // un local sans numéro : non
+  if(r[champ==='num'?'num':'name']===v) return;
+  pushUndo();
+  if(state.newRooms[c]) state.newRooms[c][champ==='num'?'num':'name']=v;
+  else {
+    r[champ==='num'?'num':'name']=v;
+    state.noms[c]={num:r.num, name:r.name};
+  }
+  propagerNoms();
+  render(); panel(); majMetres(); majConformite();
+}
+function propagerNoms(){
+  for(const p of P){
+    const a=roomInfo(p.ca), b=roomInfo(p.cb);
+    if(a){ p.a=a.num; p.name_a=a.name; }
+    if(b){ p.b=b.num; p.name_b=b.name; }
+  }
+  for(const p of D.pairs){
+    const a=roomInfo(p.ca), b=roomInfo(p.cb);
+    if(a){ p.a=a.num; p.name_a=a.name; }
+    if(b){ p.b=b.num; p.name_b=b.name; }
+  }
+}
 function polyArea(pts){ let a=0;
   for(let i=0;i<pts.length;i++){ const [x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length];
     a+=x1*y2-x2*y1; }
@@ -3953,12 +4755,14 @@ function panel(){
       corps+='<div class="card" style="padding:12px;margin-top:12px"><div class="muted">'+
         'Mode <b style="color:var(--texte)">Pièce</b> actif : glissez les sommets bleus, '+
         'double-clic sur un bord pour ajouter un point, Alt+clic pour en retirer un.</div></div>';
-    if(isNew)
-      corps='<div style="display:flex;gap:8px;margin-top:12px">'+
-        '<div style="width:88px"><div class="muted" style="margin-bottom:4px">N°</div>'+
-        '<input id="rnum" value="'+ech(r.num)+'" style="width:100%"></div>'+
-        '<div style="flex:1"><div class="muted" style="margin-bottom:4px">Nom</div>'+
-        '<input id="rname" value="'+ech(r.name)+'" style="width:100%"></div></div>'+corps;
+    corps='<div style="display:flex;gap:8px;margin-top:12px">'+
+      '<div style="width:88px"><div class="muted" style="margin-bottom:4px">N°</div>'+
+      '<input id="rnum" value="'+ech(r.num)+'" style="width:100%"></div>'+
+      '<div style="flex:1"><div class="muted" style="margin-bottom:4px">Nom</div>'+
+      '<input id="rname" value="'+ech(r.name)+'" style="width:100%"></div></div>'+
+      (!isNew && D.lus ? '<div class="muted" style="margin-top:6px">Libellé lu par '+
+        'reconnaissance de forme : relisez-le, il commande la catégorie et la '+
+        'cible STC.</div>' : '')+corps;
     s.innerHTML=carte(isNew?'Nouvel espace':ech(r.num)+' · '+ech(r.name),
       (r.area_decl==null?'?':fr(r.area_decl,1))+' m² déclarés · '+fr(surf,1)+' m² '+
         (isNew?'tracés':'détectés')+(r.escalier?' · cage d\'escalier détectée':''),
@@ -3975,11 +4779,11 @@ function panel(){
       const q=cl[+row.dataset.p];
       selPair=q; selRoom=selSeg=selPorte=null; render(); panel();
       const g=q.segments[0]; if(g) centrerSur(g.cx,g.cy); }; });
+    s.querySelector('#rnum').onchange=function(e){
+      renommerPiece(selRoom, 'num', e.target.value); };
+    s.querySelector('#rname').onchange=function(e){
+      renommerPiece(selRoom, 'name', e.target.value); };
     if(isNew){
-      s.querySelector('#rnum').onchange=function(e){ pushUndo();
-        state.newRooms[selRoom].num=e.target.value; panel(); };
-      s.querySelector('#rname').onchange=function(e){ pushUndo();
-        state.newRooms[selRoom].name=e.target.value; panel(); };
       s.querySelector('#rdel').onclick=function(){ pushUndo();
         delete state.newRooms[selRoom]; delete state.polys[selRoom];
         delete state.cats[selRoom]; selRoom=null; render(); panel(); };
@@ -4873,7 +5677,7 @@ function expCSV(){
 function etatValidation(){
   const geometry={}; for(const p of P) geometry[pairKey(p)]=p.segments;
   return {sheet:D.sheet,cats:state.cats,overrides:state.overrides,
-    excluded:state.excluded,matrix:state.matrix,geometry,
+    excluded:state.excluded,matrix:state.matrix,geometry,noms:state.noms,
     manual:state.manual,polys:state.polys,newRooms:state.newRooms,
     portes_man:state.portes_man,portes_etat:state.portesEtat,
     zonage,portes_aff,echelle:D.echelle,last_stc:lastSTC,last_stc_porte:lastSTCPorte,
@@ -5077,6 +5881,16 @@ function applyState(j){
   state.newRooms=j.newRooms||{};
   nrCount=Math.max(0,...Object.keys(state.newRooms).map(k=>+k.replace('NR','')||0));
   initPairs(j.geometry); P.forEach(p=>p.segments.forEach(segMeta));
+  // Les libellés lus sont remis d'abord : sans quoi une annulation laisserait en
+  // place le nom corrigé, l'état d'avant n'en portant aucune trace.
+  state.noms=j.noms||{};
+  for(const [c,r] of Object.entries(D.rooms)){
+    const lu=(D.nomsLus||{})[c];
+    if(lu){ r.num=lu.num; r.name=lu.name; }
+    const v=state.noms[c];
+    if(v){ if(v.num) r.num=v.num; if(v.name) r.name=v.name; }
+  }
+  propagerNoms();
   selRoom=selPair=selSeg=selPorte=null;
   if(j.last_stc) lastSTC=j.last_stc;
   if(j.last_stc_porte) lastSTCPorte=j.last_stc_porte;
@@ -5105,8 +5919,11 @@ function ouvrirEditeur(payload, bgURL){
 function initEditeur(){
   state={cats:{}, overrides:{}, excluded:{}, matrix:{...D.matrix},
          manual:[], polys:JSON.parse(JSON.stringify(D.polys)), newRooms:{},
-         portes_man:[], portesEtat:{}};
+         portes_man:[], portesEtat:{}, noms:{}};
   for(const [c,r] of Object.entries(D.rooms)) state.cats[c]=r.cat;
+  // ce que le moteur a lu, avant toute correction : le repli des annulations
+  D.nomsLus={};
+  for(const [c,r] of Object.entries(D.rooms)) D.nomsLus[c]={num:r.num, name:r.name};
   nrCount=0; selRoom=selPair=selSeg=selPorte=null; drag=null; zonage=false; portes_aff=true;
   undoStack=[]; redoStack=[]; _snap=null; calibA=null; majUndoUI();
   calcInit();
