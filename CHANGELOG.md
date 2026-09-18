@@ -4,6 +4,72 @@ Les versions suivent [SemVer](https://semver.org/lang/fr/) : `MAJEUR.MINEUR.CORR
 Le numéro vit dans le fichier `VERSION` ; `build.py` l'inscrit dans `index.html`,
 où il s'affiche dans le pied de l'accueil et à côté du logo dans l'éditeur.
 
+## 2.3.0 — 2026-09-18
+
+Refonte de la détection des espaces. Mesurée sur trois niveaux d'un vrai projet,
+contre les étiquettes relevées sur le plan (numéro, nom, surface déclarée) :
+
+| Niveau | locaux au plan | retrouvés | fusionnés | manqués | écart de surface (médian) | portes |
+| --- | --- | --- | --- | --- | --- | --- |
+| 01 | 23 | 9 → **23** | 6 → **0** | 8 → **0** | 7,1 % → **1,7 %** | 18 → 52 |
+| 02 | 37 | 10 → **37** | 3 → **0** | 24 → **0** | 8,1 % → **2,4 %** | 7 → 51 |
+| 03 | 37 | 13 → **37** | 2 → **0** | 22 → **0** | 8,0 % → **3,3 %** | 10 → 49 |
+
+### Corrigé
+
+- **Deux locaux sur trois étaient jetés faute d'étiquette lisible.** Une cellule
+  sans nom n'était gardée que si elle dépassait 12 m² — ce qui supprimait tous
+  les bureaux, sanitaires, rangements et locaux techniques de n'importe quel plan
+  dont les libellés sont vectorisés à l'export. Le seuil descend à 2 m² ; en
+  dessous, on a affaire à un meuble ou à un cartouche, pas à un local.
+- **Les arcs de battement ne sont plus des obstacles.** Peints dans le masque
+  comme des cloisons, ils balayaient la pièce et le couloir, découpaient les
+  circulations en tronçons et rognaient les surfaces. La baie qu'ils signalent
+  est désormais refermée par un trait posé au droit du mur.
+- **Les portes n'étaient presque jamais vues** — 10 sur 49 sur le plan d'essai.
+  Les arcs étaient chaînés sur les sous-chemins du PDF ; or beaucoup d'exports
+  CAO écrivent chaque segment en « moveTo/lineTo » et dessinent les battants en
+  tirets, si bien qu'un quart de cercle arrive en onze sous-chemins séparés. Le
+  chaînage suit maintenant la géométrie.
+- **Les surfaces sortaient 25 % trop petites sur les petits locaux.** Une pièce
+  n'était que son vide : le mobilier, les appareils sanitaires, les battants et
+  jusqu'au cartouche de son étiquette y creusaient des trous. Les pièces
+  repoussent maintenant sur tout ce qui n'est pas mur ou baie fermée, et
+  reprennent la moitié intérieure du trait de mur, qui est centré sur la face.
+- **Un trou d'un pixel faisait communiquer deux pièces.** Les traits qui
+  referment une baie sont accrochés au pixel de mur le plus proche et débordent
+  de quelques centimètres de part et d'autre.
+
+### Ajouté
+
+- **Linteaux virtuels.** Deux bouts de mur restés face à face, alignés et
+  distants de 0,55 à 2,00 m, valent une ouverture : elle est refermée avant la
+  recherche des pièces. Sans cela il fallait demander à la fermeture
+  morphologique de combler 0,90 m, ce qui soudait les couloirs du même coup.
+  Couvre aussi les baies sans battant dessiné et les portes coulissantes.
+- **Les régularités du dessin sont reconnues et écartées** : quatre traits
+  parallèles régulièrement espacés de moins d'une porte (revêtement, hachure de
+  poché, volée de marches) et les tirets réguliers alignés d'un trait d'axe de
+  trame. Un gymnase dont le plancher est dessiné en lames de 5 cm et le terrain
+  de badminton qui s'y superpose ressortaient en une trentaine de cellules.
+- **Une cloison fine doit être doublée.** Une cloison a une épaisseur : deux
+  traits parallèles à 5–40 cm. Un trait fin isolé est un marquage au sol ou
+  l'arête d'un meuble — il ne sépare plus deux locaux.
+- **Banc de vérité terrain** (`tests/verite.mjs`) : le plan passe dans le vrai
+  chemin de l'outil, et le relevé est confronté à une liste de locaux lue sur le
+  plan. Rapport par local, comptage des fusions, des manques et de l'écart de
+  surface. Les fichiers de vérité restent hors dépôt, avec les plans.
+
+### Modifié
+
+- **Le rattrapage des circulations est retiré.** Il rendait les couloirs que les
+  arcs de battement détruisaient ; ceux-ci n'étant plus peints, il ne rattrapait
+  plus rien et coûtait un quart du temps d'analyse. L'analyse d'une planche
+  36 × 24 po passe de ~15 s à ~11 s.
+- **La finesse ne décide plus du résultat.** Elle arbitrait entre pièces soudées
+  et pièces éclatées ; les baies étant refermées explicitement, le même plan
+  donne les mêmes 37 locaux à finesse 2, 4 ou 6.
+
 ## 2.2.0 — 2026-09-17
 
 ### Modifié

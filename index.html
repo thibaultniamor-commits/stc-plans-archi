@@ -545,7 +545,7 @@ button.ptab.on .cnt{ color:#cfe0ff; }
 <div id="acc_foot">
   <span>Aucun serveur, aucune connexion — le fichier reste sur votre poste.</span>
   <div style="flex:1"></div>
-  <span>Version 2.2.0 · LEED v4 · WELL v2 · ANSI/ASA S12.60 · CNB 2020</span>
+  <span>Version 2.3.0 · LEED v4 · WELL v2 · ANSI/ASA S12.60 · CNB 2020</span>
 </div>
 </div>
 
@@ -554,7 +554,7 @@ button.ptab.on .cnt{ color:#cfe0ff; }
 <div id="topnav">
   <span id="brand">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-logo"/></svg>
-    Cibles STC<i id="ver">2.2.0</i></span>
+    Cibles STC<i id="ver">2.3.0</i></span>
   <span id="projchip"><span id="titre"></span><span id="srvinfo"></span></span>
 
   <div id="ruban">
@@ -1098,6 +1098,10 @@ const RULES = JSON.parse(document.getElementById('regles').textContent);
 // ================== moteur (portage JS de moteur_stc.py) ==================
 const MOTEUR = (() => {
 const RSCALE = 2;
+// Surface minimale d'une cellule qu'on garde comme local faute d'étiquette
+// lisible. Un rangement fait 4 m², un sanitaire 6 m² : au-dessus de ~2 m² on a
+// affaire à un local, en dessous à un meuble ou à un cartouche.
+const AIRE_ANON = 2.0;
 
 function norm_(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
 function classifier(nom){
@@ -1314,16 +1318,37 @@ function arcInfo(pts, cx, cy){
 }
 function detecterPortes(drawings, clip, ptPerM){
   const frags=[];
+  // Les arcs se chaînent sur la géométrie, pas sur les sous-chemins : beaucoup
+  // d'exports CAO écrivent chaque segment en « moveTo/lineTo » et dessinent les
+  // battants en tirets — un quart de cercle arrive alors en onze sous-chemins
+  // séparés par des trous. Couper la chaîne sur le moveTo, comme avant, revenait
+  // à ne voir aucune porte chez ces émetteurs. On enchaîne donc tant que le
+  // segment suivant repart dans la direction du précédent, à un tiret près.
+  const TROU=0.22*ptPerM;
   for(const d of drawings){
     const chs=[]; let cur=[];
-    const fin=()=>{ if(cur.length>=5) chs.push(cur); cur=[]; };
+    const fin=()=>{ if(cur.length>=6) chs.push(cur); cur=[]; };
     for(const it of d.items){
-      if(!it){ fin(); continue; }
-      const [x1,y1,x2,y2]=it;
-      if(Math.hypot(x2-x1,y2-y1)>9){ fin(); continue; }
-      if(cur.length && Math.hypot(cur[cur.length-1][0]-x1,cur[cur.length-1][1]-y1)<=7)
-        cur.push([x1,y1],[x2,y2]);
-      else { fin(); cur=[[x1,y1],[x2,y2]]; }
+      if(!it) continue;
+      let [x1,y1,x2,y2]=it;
+      const Ls=Math.hypot(x2-x1,y2-y1);
+      if(Ls>9 || Ls<1e-6){ if(Ls>9) fin(); continue; }
+      if(cur.length>=2){
+        const n=cur.length, [px,py]=cur[n-1];
+        // le segment peut arriver retourné d'un émetteur à l'autre
+        if(Math.hypot(px-x2,py-y2) < Math.hypot(px-x1,py-y1)){
+          const tx=x1, ty=y1; x1=x2; y1=y2; x2=tx; y2=ty;
+        }
+        const gx=x1-px, gy=y1-py, g=Math.hypot(gx,gy);
+        const dx=cur[n-1][0]-cur[n-2][0], dy=cur[n-1][1]-cur[n-2][1];
+        const dl=Math.hypot(dx,dy)||1;
+        const suit = g<=TROU
+          && (g<0.1 || (dx*gx+dy*gy)/(dl*g) > 0.85)
+          && (dx*(x2-x1)+dy*(y2-y1))/(dl*Ls) > 0.7;
+        if(suit) cur.push([x1,y1],[x2,y2]);
+        else { fin(); cur=[[x1,y1],[x2,y2]]; }
+      }
+      else cur=[[x1,y1],[x2,y2]];
     }
     fin();
     for(const ch of chs){
@@ -1505,6 +1530,223 @@ function runsDe(pixels, W, GAP, px2m, clip){
   return out;
 }
 
+// ---- ouvertures : linteaux virtuels ----
+// Une baie coupe les deux faces d'un mur. Deux bouts de mur restés face à face,
+// alignés et distants d'une largeur de porte, valent une ouverture : on la
+// referme d'un trait avant de chercher les pièces. Sans ce trait, il faudrait
+// demander à la fermeture morphologique de combler 0,90 m — elle souderait du
+// même coup les couloirs et rognerait les pièces.
+function linteauxVirtuels(murs, ptPerM, murAu){
+  const GMIN=0.55*ptPerM, GMAX=2.00*ptPerM;
+  const AV=0.10*ptPerM, AR=0.09*ptPerM, MARGE=0.14*ptPerM;
+  const bouts=[];
+  for(const [x1,y1,x2,y2] of murs){
+    const L=Math.hypot(x2-x1,y2-y1);
+    if(L<1e-6) continue;
+    const ux=(x2-x1)/L, uy=(y2-y1)/L;
+    // un bout n'est un bout que si le mur s'arrête là : rien devant, du mur derrière
+    if(!murAu(x1-ux*AV,y1-uy*AV) && murAu(x1+ux*AR,y1+uy*AR)) bouts.push([x1,y1,-ux,-uy]);
+    if(!murAu(x2+ux*AV,y2+uy*AV) && murAu(x2-ux*AR,y2-uy*AR)) bouts.push([x2,y2,ux,uy]);
+  }
+  const C=GMAX, grille=new Map();
+  bouts.forEach((b,i)=>{
+    const k=Math.floor(b[0]/C)+'_'+Math.floor(b[1]/C);
+    if(!grille.has(k)) grille.set(k,[]);
+    grille.get(k).push(i);
+  });
+  const vide=(ax,ay,bx,by,d)=>{            // la baie doit être libre de mur
+    const ux=(bx-ax)/d, uy=(by-ay)/d;
+    for(let k=MARGE;k<=d-MARGE;k+=1)
+      if(murAu(ax+ux*k, ay+uy*k)) return false;
+    return true;
+  };
+  const out=[], pris=new Array(bouts.length).fill(1e9);
+  for(let i=0;i<bouts.length;i++){
+    const a=bouts[i], ci=Math.floor(a[0]/C), cj=Math.floor(a[1]/C);
+    for(let di=-1;di<=1;di++) for(let dj=-1;dj<=1;dj++){
+      for(const j of (grille.get((ci+di)+'_'+(cj+dj))||[])){
+        if(j<=i) continue;
+        const b=bouts[j], dx=b[0]-a[0], dy=b[1]-a[1], d=Math.hypot(dx,dy);
+        if(d<GMIN || d>GMAX) continue;
+        const gx=dx/d, gy=dy/d;
+        if(a[2]*gx+a[3]*gy < 0.97) continue;   // b est droit devant a…
+        if(b[2]*gx+b[3]*gy > -0.97) continue;  // …et a droit devant b
+        if(d>pris[i] && d>pris[j]) continue;
+        if(!vide(a[0],a[1],b[0],b[1],d)) continue;
+        pris[i]=Math.min(pris[i],d); pris[j]=Math.min(pris[j],d);
+        out.push([a[0],a[1],b[0],b[1]]);
+      }
+    }
+  }
+  // deux faces d'un même mur donnent deux linteaux : c'est voulu. En revanche
+  // le même couple, vu deux fois, ne doit pas être posé deux fois.
+  const vus=new Set(), net=[];
+  for(const s of out){
+    const k=[Math.round(s[0]),Math.round(s[1]),Math.round(s[2]),Math.round(s[3])].join(',');
+    if(vus.has(k)) continue;
+    vus.add(k); net.push(s);
+  }
+  return net;
+}
+
+// ---- régularités : trames de sol, hachures, marches, traits d'axe ----
+// Deux motifs que le moteur prenait pour des cloisons, faute de les nommer :
+//  — quatre traits parallèles régulièrement espacés de moins d'une porte : un
+//    revêtement, une hachure de poché, une volée de marches. Peints dans le
+//    masque, ils débitent la pièce en lamelles ;
+//  — le long d'un même axe, des tirets de même longueur séparés de trous de
+//    même largeur : un trait d'axe de trame structurale, qui traverse tout le
+//    bâtiment et coupe en deux chaque pièce qu'il rencontre. Les exports qui
+//    dessinent les tirets un à un ne laissent rien d'autre pour le reconnaître.
+function tramesRegulieres(segs, ptPerM){
+  const EMIN=0.02*ptPerM, EMAX=0.60*ptPerM, LMIN=0.25*ptPerM, PAS=0.01*ptPerM;
+  const parAngle=new Map();
+  for(const s of segs){
+    const L=Math.hypot(s[0]-s[2], s[1]-s[3]);
+    if(L<LMIN) continue;
+    const a=(Math.round(((Math.atan2(s[3]-s[1],s[2]-s[0])*180/Math.PI)%180+180)%180/4)*4)%180;
+    if(!parAngle.has(a)) parAngle.set(a,[]);
+    parAngle.get(a).push([s,L]);
+  }
+  const trame=new Set();
+  for(const [a,items] of parAngle){
+    if(items.length<4) continue;
+    const th=a*Math.PI/180, nx=-Math.sin(th), ny=Math.cos(th);
+    // regrouper par distance à l'axe : un même trait arrive parfois en morceaux
+    const rangs=new Map();
+    for(const [s] of items){
+      const o=Math.round(((s[0]+s[2])/2*nx+(s[1]+s[3])/2*ny)/PAS);
+      if(!rangs.has(o)) rangs.set(o,[]);
+      rangs.get(o).push(s);
+    }
+    const ux=Math.cos(th), uy=Math.sin(th);
+    for(const [,liste] of rangs){
+      if(liste.length<4) continue;
+      const suite=liste.map(s=>{
+        const t1=s[0]*ux+s[1]*uy, t2=s[2]*ux+s[3]*uy;
+        return [Math.min(t1,t2), Math.max(t1,t2), s];
+      }).sort((p,q)=>p[0]-q[0]);
+      let n=1;
+      for(let k=1;k<suite.length;k++){
+        const trou=suite[k][0]-suite[k-1][1];
+        const d1=suite[k-1][1]-suite[k-1][0], d2=suite[k][1]-suite[k][0];
+        if(trou>0.3 && trou<3*d1 && Math.abs(d2-d1)<=0.25*d1) n++;
+        else n=1;
+        if(n>=4) for(let m=k-n+1;m<=k;m++) trame.add(suite[m][2]);
+      }
+    }
+    const os=[...rangs.keys()].sort((p,q)=>p-q);
+    let deb=0;
+    while(deb<os.length-3){
+      let fin=deb+1, eRef=0;
+      while(fin<os.length){
+        const e=(os[fin]-os[fin-1])*PAS;
+        if(e<EMIN || e>EMAX) break;
+        if(fin===deb+1) eRef=e;
+        else if(Math.abs(e-eRef)>0.35*eRef) break;
+        fin++;
+      }
+      if(fin-deb>=4)
+        for(let k=deb;k<fin;k++) for(const s of rangs.get(os[k])) trame.add(s);
+      deb = fin>deb+1 ? fin-1 : deb+1;   // le trait qui rompt une trame peut ouvrir la suivante
+    }
+  }
+  return trame;
+}
+
+// ---- un trait fin est-il une cloison ? ----
+// Une cloison a une épaisseur : elle se dessine en deux traits parallèles
+// distants de 5 à 40 cm. Un trait fin isolé, lui, est un marquage au sol, une
+// limite de revêtement ou l'arête d'un meuble — et le peindre dans le masque
+// débite la pièce. C'est ce qui découpait un gymnase en une trentaine de
+// cellules, une par case de terrain de badminton.
+function finsDoublees(fins, ptPerM){
+  const EMIN=0.03*ptPerM, EMAX=0.40*ptPerM, LMIN=0.40*ptPerM;
+  const parAngle=new Map();
+  for(const s of fins){
+    const L=Math.hypot(s[0]-s[2], s[1]-s[3]);
+    if(L<LMIN) continue;
+    const a=(Math.round(((Math.atan2(s[3]-s[1],s[2]-s[0])*180/Math.PI)%180+180)%180/4)*4)%180;
+    if(!parAngle.has(a)) parAngle.set(a,[]);
+    parAngle.get(a).push(s);
+  }
+  const doubles=new Set();
+  for(const [a,liste] of parAngle){
+    if(liste.length<2) continue;
+    const th=a*Math.PI/180, ux=Math.cos(th), uy=Math.sin(th), nx=-uy, ny=ux;
+    const items=liste.map(s=>{
+      const t1=s[0]*ux+s[1]*uy, t2=s[2]*ux+s[3]*uy;
+      return {s, o:(s[0]+s[2])/2*nx+(s[1]+s[3])/2*ny,
+              t0:Math.min(t1,t2), t1:Math.max(t1,t2)};
+    }).sort((p,q)=>p.o-q.o);
+    for(let i=0;i<items.length;i++){
+      const A=items[i];
+      for(let j=i+1;j<items.length;j++){
+        const B=items[j], e=B.o-A.o;
+        if(e>EMAX) break;
+        if(e<EMIN) continue;
+        const rec=Math.min(A.t1,B.t1)-Math.max(A.t0,B.t0);
+        if(rec < 0.5*Math.min(A.t1-A.t0, B.t1-B.t0)) continue;
+        doubles.add(A.s); doubles.add(B.s);
+      }
+    }
+  }
+  return doubles;
+}
+
+// ---- les pièces reprennent ce que le mobilier leur avait mangé ----
+// Le masque de segmentation contient tout ce qui est sombre : mobilier,
+// appareils sanitaires, battants, cartouches d'étiquette. Ces objets creusent
+// la pièce et faussent sa surface. Une fois les pièces trouvées, on les laisse
+// repousser sur tout ce qui n'est pas une vraie barrière (mur ou baie fermée) :
+// chaque pixel revient à la pièce géodésiquement la plus proche.
+// `repris` dit quels pixels une pièce a le droit de reprendre : les objets
+// (mobilier, battants, cartouches) et les miettes de vide trop petites pour être
+// un local. Une cellule de vide qui avait la taille d'un local mais qui a été
+// écartée reste dehors : la laisser absorber par sa voisine ferait une fusion.
+// `dmax` borne la marche à la largeur d'un obstacle, pas à celle d'une pièce.
+// `demi` rend enfin à la pièce la moitié intérieure du trait de mur : le trait
+// est centré sur la face, et s'arrêter à son bord extérieur retire une bordure
+// de quelques centimètres tout autour — ce qui se voit sur les petits locaux.
+function croissance(lab, ids, barriere, hull, repris, W, H, dmax, demi){
+  const N=W*H, dest=new Int32Array(N), dist=new Uint16Array(N);
+  let maxId=0; for(const i of ids) if(i>maxId) maxId=i;
+  const retenu=new Uint8Array(maxId+1);
+  for(const i of ids) retenu[i]=1;
+  const file=new Int32Array(N); let nf=0;
+  for(let i=0;i<N;i++){
+    const L=lab[i];
+    if(L>0 && L<=maxId && retenu[L]){ dest[i]=L; file[nf++]=i; }
+  }
+  let deb=0;
+  while(deb<nf){
+    const i=file[deb++], L=dest[i], d=dist[i], x=i%W;
+    if(d>=dmax) continue;
+    const v=[x>0?i-1:-1, x<W-1?i+1:-1, i>=W?i-W:-1, i<N-W?i+W:-1];
+    for(const j of v){
+      if(j<0 || dest[j] || !hull[j] || barriere[j] || !repris[j]) continue;
+      dest[j]=L; dist[j]=d+1;
+      if(nf<N) file[nf++]=j;
+    }
+  }
+  // second temps : le demi-trait de mur, repris depuis toute la bordure
+  if(demi>0){
+    dist.fill(0); nf=0; deb=0;
+    for(let i=0;i<N;i++) if(dest[i]) file[nf++]=i;
+    while(deb<nf){
+      const i=file[deb++], L=dest[i], d=dist[i], x=i%W;
+      if(d>=demi) continue;
+      const v=[x>0?i-1:-1, x<W-1?i+1:-1, i>=W?i-W:-1, i<N-W?i+W:-1];
+      for(const j of v){
+        if(j<0 || dest[j] || !hull[j] || !barriere[j]) continue;
+        dest[j]=L; dist[j]=d+1;
+        if(nf<N) file[nf++]=j;
+      }
+    }
+  }
+  return dest;
+}
+
 // ---- analyse complete ----
 async function analyser(extr, finesse, echelle, progress){
   const say = async t => { if(progress) progress(t); await new Promise(r=>setTimeout(r,15)); };
@@ -1537,8 +1779,36 @@ async function analyser(extr, finesse, echelle, progress){
 
   const W=Math.floor(clip.w*RSCALE), H=Math.floor(clip.h*RSCALE), N=W*H;
 
+  await say('Portes et ouvertures…');
+  // Les arcs de battement sont repérés avant les masques : ce ne sont pas des
+  // obstacles — ils balaient la pièce et le couloir, et les peindre coupait les
+  // circulations en morceaux. Les baies qu'ils signalent seront refermées par
+  // un linteau, avec celles qui n'ont pas d'arc.
+  const portes=detecterPortes(drawings, clip, ptPerM);
+  const CP=2*ptPerM, gArcs=new Map();
+  for(const p of portes){
+    const r=p.r_m*ptPerM;
+    for(let i=Math.floor((p.x-r)/CP);i<=Math.floor((p.x+r)/CP);i++)
+      for(let j=Math.floor((p.y-r)/CP);j<=Math.floor((p.y+r)/CP);j++){
+        const k=i+'_'+j;
+        if(!gArcs.has(k)) gArcs.set(k,[]);
+        gArcs.get(k).push([p.x,p.y,r]);
+      }
+  }
+  const surArc=(x1,y1,x2,y2)=>{
+    const mx=(x1+x2)/2, my=(y1+y2)/2;
+    for(const [cx,cy,r] of gArcs.get(Math.floor(mx/CP)+'_'+Math.floor(my/CP))||[])
+      if(Math.abs(Math.hypot(x1-cx,y1-cy)-r)<1.6 && Math.abs(Math.hypot(x2-cx,y2-cy)-r)<1.6)
+        return true;
+    return false;
+  };
+
   await say('Tracé des masques…');
-  const cv=[0,1,2].map(()=>{
+  // 0 : segmentation (tout ce qui est sombre)   1 : murs + cloisons fines (portées)
+  // 2 : barrières (1 + linteaux), sur quoi les pièces s'arrêtent en repoussant
+  // 3 : murs seuls — c'est là qu'on cherche les bouts de mur ; un vantail de
+  //     porte, trait fin mais long, y passerait pour un mur et boucherait la baie
+  const cv=[0,1,2,3].map(()=>{
     const c=document.createElement('canvas'); c.width=W; c.height=H;
     const g=c.getContext('2d',{willReadFrequently:true});
     g.strokeStyle='#fff'; g.lineCap='round'; g.lineJoin='round';
@@ -1550,17 +1820,34 @@ async function analyser(extr, finesse, echelle, progress){
     g.lineTo((x2-clip.x0)*RSCALE,(y2-clip.y0)*RSCALE); g.stroke();
   };
   const sDoor=murMin*0.55;
+  const fins=[];
+  for(const d of sombres){
+    if(d.w>=murMin) continue;
+    for(const s of lignesUtiles(d))
+      if(clip.contient(s[0],s[1]) && clip.contient(s[2],s[3])) fins.push(s);
+  }
+  const trame=tramesRegulieres(fins, ptPerM), cloisonsFines=finsDoublees(fins, ptPerM);
+  const murs=[];
   for(const d of sombres){
     const wall=d.w>=murMin, door=d.w>=sDoor&&d.w<murMin, thin=d.w<sDoor;
-    for(const [x1,y1,x2,y2] of lignesUtiles(d)){
+    for(const s of lignesUtiles(d)){
+      const [x1,y1,x2,y2]=s;
       if(!clip.contient(x1,y1)||!clip.contient(x2,y2)) continue;
+      if(!wall && trame.has(s)) continue;
       const L=Math.hypot(x2-x1,y2-y1);
       const axe=Math.abs(x1-x2)<0.5||Math.abs(y1-y2)<0.5;
-      if(wall){ trait(cv[0][1],3,x1,y1,x2,y2); trait(cv[1][1],3,x1,y1,x2,y2); trait(cv[2][1],3,x1,y1,x2,y2); }
-      else if(door){ trait(cv[0][1],5,x1,y1,x2,y2); trait(cv[2][1],5,x1,y1,x2,y2); }
-      else if(thin && L>=6 && axe){
+      if(wall){
+        murs.push(s);
+        trait(cv[0][1],3,x1,y1,x2,y2); trait(cv[1][1],3,x1,y1,x2,y2);
+        trait(cv[2][1],3,x1,y1,x2,y2); trait(cv[3][1],3,x1,y1,x2,y2);
+      }
+      else if(door){
+        if(surArc(x1,y1,x2,y2)) continue;
+        trait(cv[0][1],5,x1,y1,x2,y2);
+      }
+      else if(thin && L>=6 && axe && cloisonsFines.has(s)){
         trait(cv[0][1],3,x1,y1,x2,y2);
-        if(L>=12) trait(cv[1][1],3,x1,y1,x2,y2);
+        if(L>=12){ trait(cv[1][1],3,x1,y1,x2,y2); trait(cv[2][1],3,x1,y1,x2,y2); }
       }
     }
   }
@@ -1569,7 +1856,65 @@ async function analyser(extr, finesse, echelle, progress){
     for(let i=0;i<N;i++) b[i]=dd[i*4+3]>=128?1:0;
     return b;
   };
-  const mask=lire(cv[0]), wallpix=lire(cv[1]), maskWd=lire(cv[2]);
+  const wallpix=lire(cv[1]), murpix=lire(cv[3]);
+  const murAu=(x,y)=>{
+    const px=Math.round((x-clip.x0)*RSCALE), py=Math.round((y-clip.y0)*RSCALE);
+    if(px<1||py<1||px>=W-1||py>=H-1) return false;
+    for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++)
+      if(murpix[(py+dy)*W+px+dx]) return true;
+    return false;
+  };
+  const linteaux=linteauxVirtuels(murs, ptPerM, murAu);
+  // Un battant détecté referme sa baie à coup sûr : du gond au bout d'arc qui
+  // revient contre le mur d'en face — c'est la largeur de la porte. On ne pose
+  // le trait que si le mur s'arrête bien au gond et repart dans son dos, pour ne
+  // pas barrer une pièce quand c'est le vantail ouvert qu'on a pris pour la baie.
+  const PAS=0.09*ptPerM;
+  for(const p of portes){
+    const contre=e=>{
+      let n=0;
+      for(let a=0;a<8;a++)
+        if(murAu(e[0]+Math.cos(a*Math.PI/4)*PAS, e[1]+Math.sin(a*Math.PI/4)*PAS)) n++;
+      return n;
+    };
+    const cand=[p.a1,p.a2].filter(e=>contre(e)>0)
+      .sort((e1,e2)=>contre(e2)-contre(e1));
+    for(const e of cand){
+      const L=Math.hypot(e[0]-p.x, e[1]-p.y);
+      if(L<0.4*ptPerM) continue;
+      const ux=(e[0]-p.x)/L, uy=(e[1]-p.y)/L;
+      if(murAu(p.x+ux*PAS, p.y+uy*PAS)) continue;      // la baie doit être libre
+      if(!murAu(p.x-ux*PAS, p.y-uy*PAS)) continue;     // et le mur repartir derrière
+      linteaux.push([p.x,p.y,e[0],e[1]]);
+      break;
+    }
+  }
+  // Un linteau doit mordre le mur aux deux bouts : posé au pixel près il laisse
+  // un trou d'un pixel, et un trou d'un pixel fait communiquer deux pièces. On
+  // accroche donc chaque bout au pixel de mur le plus proche, puis on déborde
+  // de quelques centimètres.
+  const RANC=Math.round(0.12*ptPerM*RSCALE), DEB=0.06*ptPerM;
+  const ancre=(x,y)=>{
+    const px=Math.round((x-clip.x0)*RSCALE), py=Math.round((y-clip.y0)*RSCALE);
+    let bx=x, by=y, bd=1e9;
+    for(let dy=-RANC;dy<=RANC;dy++){
+      const v=py+dy;
+      if(v<0||v>=H) continue;
+      for(let dx=-RANC;dx<=RANC;dx++){
+        const u=px+dx, d=dx*dx+dy*dy;
+        if(u<0||u>=W||d>=bd||!murpix[v*W+u]) continue;
+        bd=d; bx=u/RSCALE+clip.x0; by=v/RSCALE+clip.y0;
+      }
+    }
+    return [bx,by];
+  };
+  for(const s of linteaux){
+    const [x1,y1]=ancre(s[0],s[1]), [x2,y2]=ancre(s[2],s[3]);
+    const L=Math.hypot(x2-x1,y2-y1)||1, ux=(x2-x1)/L*DEB, uy=(y2-y1)/L*DEB;
+    const a=x1-ux, b=y1-uy, c=x2+ux, e=y2+uy;
+    trait(cv[0][1],3,a,b,c,e); trait(cv[2][1],3,a,b,c,e);
+  }
+  const mask=lire(cv[0]), barr=lire(cv[2]);
 
   await say('Emprise du bâtiment…');
   const ch=closing(mask,W,H,30);
@@ -1642,70 +1987,14 @@ async function analyser(extr, finesse, echelle, progress){
     const m=nom.match(/(\d+(?:[.,]\d+)?)\s*m/);
     const adecl=m?parseFloat(m[1].replace(',','.')):null;
     if(!nom){
-      if(adet<12) continue;
+      // Un local sans étiquette lisible reste un local. Le seuil d'avant
+      // (12 m²) jetait les bureaux, sanitaires et rangements de tous les plans
+      // dont les libellés sont vectorisés à l'export — la moitié des pièces.
+      if(adet<AIRE_ANON) continue;
       k++; num=num||('P'+k); nom='Espace non identifié';
     }
     const cat=nom!=='Espace non identifié'?classifier(nom):'circulation';
     rooms[String(c)]={num:num||String(c), name:nom, area_decl:adecl, area_det:adet, cat};
-  }
-
-  await say('Récupération des circulations…');
-  const closedWd=closing(maskWd,W,H,r);
-  const freeWd=new Uint8Array(N);
-  for(let i=0;i<N;i++) freeWd[i]=(!closedWd[i]&&hull[i])?1:0;
-  const cc2=labelCC(freeWd,W,H);
-  const retenus=new Uint8Array(N);
-  {
-    let maxid=0; for(const key of Object.keys(rooms)) maxid=Math.max(maxid,+key);
-    const inR=new Uint8Array(maxid+1);
-    for(const key of Object.keys(rooms)) inR[+key]=1;
-    for(let i=0;i<N;i++) if(lab[i]&&lab[i]<=maxid&&inR[lab[i]]) retenus[i]=1;
-  }
-  let prochain=cc.n+1;
-  for(let c2=1;c2<=cc2.n;c2++){
-    const a2=cc2.areas[c2]/pxPerM2;
-    if(a2<5) continue;
-    let inter=0, tot=0, npts=0;
-    const bb2=cc2.bb[c2];
-    for(let y=bb2[1];y<=bb2[3];y++)
-      for(let x=bb2[0];x<=bb2[2];x++){
-        const i=y*W+x;
-        if(cc2.lab[i]!==c2) continue;
-        tot++; if(retenus[i]) inter++;
-      }
-    if(inter/tot > 0.30) continue;
-    if(filtreTrame){
-      for(const [px,py] of hatch)
-        if(px>=bb2[0]&&px<=bb2[2]&&py>=bb2[1]&&py<=bb2[3]&&cc2.lab[py*W+px]===c2) npts++;
-      if(npts < Math.max(2, a2*0.10)) continue;
-    }
-    let zone=0;
-    const fragIds=new Set();
-    for(let y=bb2[1];y<=bb2[3];y++)
-      for(let x=bb2[0];x<=bb2[2];x++){
-        const i=y*W+x;
-        if(cc2.lab[i]!==c2||retenus[i]) continue;
-        zone++;
-        if(lab[i]===0) lab[i]=prochain;
-        else if(!rooms[String(lab[i])]) fragIds.add(lab[i]);
-      }
-    if(zone/pxPerM2 < 5) continue;
-    if(fragIds.size)
-      for(let i=0;i<N;i++) if(fragIds.has(lab[i])) lab[i]=prochain;
-    let aire=0, minx=1e9,miny=1e9,maxx=-1,maxy=-1;
-    for(let y2=0;y2<H;y2++) for(let x2=0;x2<W;x2++){
-      if(lab[y2*W+x2]!==prochain) continue;
-      aire++; if(x2<minx)minx=x2; if(x2>maxx)maxx=x2; if(y2<miny)miny=y2; if(y2>maxy)maxy=y2;
-    }
-    const adet2=Math.round(aire/pxPerM2*10)/10;
-    if(adet2>=5){
-      k++;
-      rooms[String(prochain)]={num:'P'+k, name:'Espace non identifié', area_decl:null,
-                               area_det:adet2, cat:'circulation'};
-      cc.bb[prochain]=[minx,miny,maxx,maxy];
-      cc.areas[prochain]=aire;
-    }
-    prochain++;
   }
 
   await say('Escaliers et polygones…');
@@ -1731,11 +2020,40 @@ async function analyser(extr, finesse, echelle, progress){
     }
   }
 
-  // reclassification par nom + purge des petites cellules anonymes
+  await say('Surfaces des pièces…');
+  // Jusqu'ici une pièce n'est que son vide : le mobilier, les appareils, les
+  // battants et les cartouches d'étiquette y creusent des trous, et sa surface
+  // sortait 25 % trop petite sur les petits locaux. On la laisse repousser sur
+  // tout ce qui n'est pas mur ni baie fermée.
+  {
+    const barriere=closing(barr,W,H,r);
+    const idsRet=Object.keys(rooms).map(Number);
+    const estPiece=new Uint8Array(cc.n+2);
+    for(const id of idsRet) estPiece[id]=1;
+    for(let i=1;i<=cc.n;i++) if((cc.areas[i]||0)/pxPerM2>=1.5) estPiece[i]=1;
+    const repris=new Uint8Array(N);
+    for(let i=0;i<N;i++){ const L=lab[i]; repris[i]=(!L || !estPiece[L])?1:0; }
+    const dmax=Math.round(0.45*ptPerM*RSCALE), demi=Math.round(RSCALE*0.75);
+    const dest=croissance(lab, idsRet, barriere, hull, repris, W, H, dmax, demi);
+    for(const id of idsRet){ cc.areas[id]=0; cc.bb[id]=null; }
+    for(let i=0;i<N;i++){
+      const L=dest[i];
+      lab[i]=L;
+      if(!L) continue;
+      cc.areas[L]=(cc.areas[L]||0)+1;
+      const x=i%W, y=(i-x)/W, b=cc.bb[L];
+      if(!b) cc.bb[L]=[x,y,x,y];
+      else { if(x<b[0])b[0]=x; if(y<b[1])b[1]=y; if(x>b[2])b[2]=x; if(y>b[3])b[3]=y; }
+    }
+    for(const id of idsRet)
+      if(rooms[String(id)]) rooms[String(id)].area_det=Math.round(cc.areas[id]/pxPerM2*10)/10;
+  }
+
+  // reclassification par nom + purge des cellules anonymes trop petites
   for(const rid of Object.keys(rooms)){
     const rr=rooms[rid];
     if(rr.name!=='Espace non identifié') rr.cat=classifier(rr.name);
-    if(rr.name==='Espace non identifié' && rr.area_det<12) delete rooms[rid];
+    if(rr.name==='Espace non identifié' && rr.area_det<AIRE_ANON) delete rooms[rid];
   }
 
   const polys={};
@@ -1765,7 +2083,6 @@ async function analyser(extr, finesse, echelle, progress){
   }
 
   await say('Portes…');
-  const portes=detecterPortes(drawings, clip, ptPerM);
   const dSeg=(px,py,s)=>{
     const [x1,y1]=s.p1,[x2,y2]=s.p2, vx=x2-x1, vy=y2-y1, L2=vx*vx+vy*vy;
     const t=L2===0?0:Math.max(0,Math.min(1,((px-x1)*vx+(py-y1)*vy)/L2));
@@ -1786,6 +2103,16 @@ async function analyser(extr, finesse, echelle, progress){
   let stats=Object.keys(rooms).length+' pièces · '+pairs.length+' cloisons · '+
     portes.length+' portes · '+nEsc+" cages d'escalier · murs >= "+murMin+' pt';
   if(notes.length) stats+=' · '+notes.join(' · ');
+
+  // Sonde du banc d'essai : livre les masques intermédiaires à qui les demande.
+  // Rien ne la déclenche dans l'outil ; elle sert à regarder ce que le moteur a
+  // vu quand une pièce sort de travers (tests/verite.mjs, et les rendus de mise
+  // au point du banc).
+  if(typeof window!=='undefined' && window.__MOTEUR_DBG)
+    window.__MOTEUR_DBG({W, H, RSCALE, clip:{x0:clip.x0, y0:clip.y0, w:clip.w, h:clip.h},
+      ptPerM, murMin, mask, wallpix, murpix, barr, hull, closed, lab, rooms, linteaux,
+      pxPerM2, aires:cc.areas, filtreTrame, tramePar,
+      nFins:fins.length, nTrame:trame.size, nCloisonsFines:cloisonsFines.size});
 
   return {clip:[clip.x0,clip.y0,clip.x1,clip.y1], rooms, pairs, polys, portes,
           matrix:RULES.matrice_stc, cats:Object.keys(RULES.categories),

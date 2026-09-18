@@ -17,6 +17,10 @@ double-clic.
 - **Analyse d'un plan vectoriel** — PDF, SVG ou DXF : extraction des traits,
   détection des murs, des locaux (numéro, nom, surface), des portes et des cages
   d'escalier ; classement des locaux par mots-clés en six catégories acoustiques.
+  Les baies sont refermées par un linteau avant la recherche des pièces, et
+  chaque pièce reprend ce que le mobilier lui mangeait : sur trois niveaux d'un
+  vrai projet, 97 locaux sur 97 sont retrouvés, sans fusion, à 3 % près en
+  surface (voir [CHANGELOG.md](CHANGELOG.md), 2.3.0).
 - **Diagnostic avant analyse** — chaque page est examinée et reçoit un badge :
   *Vectoriel*, *Vectoriel sans texte* (tracés lisibles mais libellés vectorisés à
   l'export : les locaux seront à nommer à la main), *Image* (un scan : rien à
@@ -101,6 +105,18 @@ python tests/fixtures.py   # écrit tests/fx/, non versionné
 node tests/banc.mjs
 ```
 
+`tests/verite.mjs` mesure la **justesse** : le plan passe dans le vrai chemin de
+l'outil, et le relevé est confronté à une liste de locaux lue sur le plan —
+numéro, nom, surface déclarée et un point sûr du local, en points PDF. Le rapport
+donne les locaux retrouvés, les fusions, les manques et l'écart de surface.
+
+```
+node tests/verite.mjs index.html <plan.pdf> <verite.json> [finesse] [sortie.json]
+```
+
+Le fichier de vérité décrit un plan réel : il reste **hors dépôt**, à côté du
+plan. Son format tient dans l'en-tête de `tests/verite.mjs`.
+
 `tests/nonreg.mjs` compare deux builds sur les mêmes plans, page par page. À
 lancer sur de vrais plans avant publication ; ils restent sur le poste, rien
 n'est versionné :
@@ -135,6 +151,9 @@ journal complet est dans [CHANGELOG.md](CHANGELOG.md).
   reclasse à la main.
 - Les atriums et escaliers mécaniques ne sont pas détectés comme locaux ; les
   vitrages ne sont pas traités automatiquement.
+- Une ouverture de plus de 2 m entre deux espaces n'est pas refermée : les deux
+  côtés ne font plus qu'un local. Un local sans étiquette lisible est relevé mais
+  reste à nommer — les circulations, gaines et cages en font partie.
 - Le PDF annoté n'est pas réécrit par le navigateur — utiliser les exports
   DXF ou PowerPoint.
 - Les valeurs des référentiels sont **indicatives** : vérifiez toujours
