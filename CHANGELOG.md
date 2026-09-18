@@ -4,6 +4,47 @@ Les versions suivent [SemVer](https://semver.org/lang/fr/) : `MAJEUR.MINEUR.CORR
 Le numéro vit dans le fichier `VERSION` ; `build.py` l'inscrit dans `index.html`,
 où il s'affiche dans le pied de l'accueil et à côté du logo dans l'éditeur.
 
+## 2.5.0 — 2026-09-18
+
+Deux gestes qui manquaient à l'accueil et au plan : **voir la planche avant de
+lancer le moteur**, et **retirer du relevé une zone qui n'en est pas une**. Le
+moteur n'a pas bougé : mêmes locaux, mêmes surfaces, mêmes cloisons.
+
+### Ajouté
+
+- **Aperçu au survol d'une vignette.** Une vignette de 92 px ne dit pas quel
+  niveau on tient, ni ce que porte le cartouche : on lançait l'analyse pour le
+  savoir, une minute pour rien quand ce n'était pas la bonne page. Survoler une
+  vignette ouvre maintenant la planche en grand, à côté de la liste et jamais
+  dessus, avec son badge de diagnostic. La molette zoome sous le curseur, le
+  glisser déplace, le double-clic et *Ajuster* reviennent à la page entière,
+  Échap ferme. **Le rendu suit le zoom** : la page s'affiche tout de suite à la
+  définition de la fenêtre, puis se refait plus finement dès qu'on grossit —
+  plafonné à 16 Mpx, une planche 36 × 24 po rendue sans limite coûterait 65 Mo.
+  Les quatre sources y passent : PDF, SVG, DXF et image.
+- **Suppr retire une zone du relevé.** L'aide clavier promettait « supprimer
+  l'objet sélectionné » ; une cloison, une porte et un espace tracé à la main
+  obéissaient, une pièce détectée non. Or le moteur sort toujours des cellules
+  qui ne sont pas des locaux — un vide de mur, une échancrure, le cadre d'un
+  numéro — et rien ne permettait de les enlever. La pièce sélectionnée s'efface
+  donc à la touche `Suppr`, ou par le bouton du panneau. Elle disparaît du plan,
+  ses cloisons quittent le métré, la conformité, la légende et les exports (JPG,
+  PowerPoint, DXF, CSV), et le compte des pièces en tient compte.
+- **Ce qui a été retiré se voit et se rétablit.** Une zone détectée est *mise de
+  côté*, pas effacée : l'analyse la connaît toujours. Le panneau au repos dit
+  combien de zones sont hors du relevé et les ramène d'un bouton ; `Ctrl+Z` fait
+  de même, et le retrait s'enregistre avec le reste du relevé (`suppr`), donc
+  survit à une sauvegarde rouverte. Un espace tracé à la main, lui, s'efface
+  vraiment : rien d'autre ne le porte.
+
+### Modifié
+
+- Le banc fonctionnel passe de **63 à 77 vérifications** : l'ouverture de
+  l'aperçu, son rendu, le zoom à la molette et sa reprise de définition, le
+  retour à la planche entière, la fermeture ; puis le retrait d'une zone, la
+  sortie de ses cloisons du métré, sa trace dans l'état enregistré, le fait que
+  le moteur la connaisse encore, et son retour par `Ctrl+Z`.
+
 ## 2.4.0 — 2026-09-18
 
 Les trois premiers points du carnet de reprise : les murs pochés, les libellés

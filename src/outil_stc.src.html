@@ -89,6 +89,24 @@ input[type=range]{ accent-color:var(--acc); vertical-align:middle; }
 .dg.ok{ color:#a9d4a9; border-color:rgba(143,185,143,.5); background:rgba(46,125,82,.2); }
 .dg.wrn{ color:#ffcf6b; border-color:rgba(240,165,0,.45); background:rgba(240,165,0,.14); }
 .dg.err{ color:var(--err); border-color:rgba(192,57,43,.5); background:rgba(192,57,43,.16); }
+/* aperçu au survol d'une vignette : la planche en grand, et de quoi zoomer
+   dedans avant de lancer le moteur */
+#appop{ position:fixed; z-index:70; display:none; flex-direction:column;
+  background:var(--panneau); border:1px solid var(--bd2); border-radius:8px;
+  box-shadow:0 18px 48px rgba(0,0,0,.55); overflow:hidden; }
+#appop.on{ display:flex; }
+#appop_hd{ display:flex; align-items:center; gap:8px; padding:8px 10px; flex:none;
+  border-bottom:1px solid var(--sep); color:var(--titre); font-weight:600; }
+#appop_hd button{ height:24px; padding:0 8px; font-weight:400; }
+#appop_hd .dg{ margin-top:0; }
+#appop_vue{ position:relative; flex:1; min-height:0; overflow:hidden;
+  background:#f2f3f5; cursor:grab; }
+#appop_vue.tire{ cursor:grabbing; }
+#appop_cv{ position:absolute; left:0; top:0; transform-origin:0 0; }
+#appop_att{ position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; background:#f2f3f5; color:#5a657f; }
+#appop_att.off{ display:none; }
+#appop_ft{ flex:none; padding:6px 10px; border-top:1px solid var(--sep); }
 .diag{ display:flex; align-items:flex-start; gap:8px; margin-top:12px; padding:10px 12px;
   border-radius:5px; border:1px solid var(--bd); background:var(--groupe);
   color:var(--second); font-size:11.5px; line-height:1.55; }
@@ -1001,6 +1019,23 @@ button.ptab.on .cnt{ color:#cfe0ff; }
 
 <div id="toast"></div>
 
+<!-- Aperçu au survol d'une vignette. Hors du flux de l'accueil : la fenêtre
+     se pose en fixed par-dessus, sans dépendre du défilement de la colonne. -->
+<div id="appop">
+  <div id="appop_hd">
+    <span id="appop_ttl"></span><span id="appop_dg"></span>
+    <div style="flex:1"></div>
+    <span class="muted num" id="appop_z">100 %</span>
+    <button class="sec" id="appop_moins" title="Dézoomer">−</button>
+    <button class="sec" id="appop_plus" title="Zoomer">+</button>
+    <button class="sec" id="appop_fit" title="Voir la planche entière">Ajuster</button>
+  </div>
+  <div id="appop_vue"><canvas id="appop_cv"></canvas>
+    <div id="appop_att">Rendu de la page…</div></div>
+  <div id="appop_ft" class="muted">Molette : zoomer · glisser : déplacer ·
+    double-clic : ajuster · Échap : fermer</div>
+</div>
+
 <div id="kbdlay" onclick="if(event.target===this)aideClavier(false)">
  <div id="kbdbox">
   <div style="display:flex;align-items:center;justify-content:space-between">
@@ -1015,7 +1050,7 @@ button.ptab.on .cnt{ color:#cfe0ff; }
     <dt><span class="kbd">N</span></dt><dd>Tracer un nouvel espace</dd>
     <dt><span class="kbd">D</span></dt><dd>Poser une porte</dd>
     <dt><span class="kbd">M</span></dt><dd>Calibrer l'échelle sur une cote connue</dd>
-    <dt><span class="kbd">Suppr</span></dt><dd>Supprimer l'objet sélectionné</dd>
+    <dt><span class="kbd">Suppr</span></dt><dd>Supprimer l'objet sélectionné — cloison, porte, ou zone retirée du relevé</dd>
     <dt><span class="kbd">Échap</span></dt><dd>Désélectionner · fermer un menu</dd>
     <dt><span class="kbd">Ctrl+Z</span></dt><dd>Annuler — <span class="kbd">Ctrl+Y</span> rétablir</dd>
     <dt><span class="kbd">Ctrl+S</span></dt><dd>Sauver le projet</dd>
@@ -3789,6 +3824,7 @@ async function montrerSource(){
 }
 
 async function montrerVignettes(){
+  apFermer();
   acc.vig.innerHTML='';
   const cases=[];
   for(let i=0;i<SRC.nPages;i++){
@@ -3802,6 +3838,8 @@ async function montrerVignettes(){
       for(const d of acc.vig.children) d.classList.toggle('on', d===div);
       majPageChoisie();
     };
+    div.onmouseenter=()=>apSurvol(i, div);
+    div.onmouseleave=apQuitte;
     acc.vig.appendChild(div);
     cases.push(div);
   }
@@ -3849,6 +3887,154 @@ function majPageChoisie(){
     ? 'L’analyse se fait sur votre poste ; vous pourrez la relancer avec une autre finesse depuis le plan.'
     : 'Rien à extraire automatiquement : le fond sera chargé tel quel et vous tracerez les cloisons vous-même.';
 }
+
+// --- aperçu au survol d'une vignette ---
+// Une vignette de 92 px ne dit pas quel niveau on tient, ni ce que porte le
+// cartouche. Le survol ouvre donc la planche en grand, et laisse zoomer dedans.
+// Le rendu suit le zoom : on montre tout de suite ce qu'on a, puis on refait la
+// page à la définition qu'il faut — plafonnée, une planche 36 × 24 po rendue à
+// 5 000 px coûte déjà 65 Mo.
+const apo={n:document.getElementById('appop'), vue:document.getElementById('appop_vue'),
+  cv:document.getElementById('appop_cv'), att:document.getElementById('appop_att'),
+  ttl:document.getElementById('appop_ttl'), dg:document.getElementById('appop_dg'),
+  z:document.getElementById('appop_z')};
+let apPage=-1;              // page affichée, -1 quand la fenêtre est fermée
+let apZ=1, apX=0, apY=0;    // zoom (px écran par point) et position de la page
+let apPW=1, apPH=1;         // taille de la page, en points
+let apRW=0;                 // largeur du rendu en place, en pixels
+let apJeton=0, apTsurvol=null, apTferme=null, apTrendu=null, apTire=null;
+const AP_MAXPX=16e6, AP_MAXW=5000;
+
+function apFit(){ const r=apo.vue.getBoundingClientRect();
+  return Math.min(r.width/apPW, r.height/apPH)||1; }
+function apPlacer(){
+  apo.cv.style.transform='translate('+apX+'px,'+apY+'px) scale('+(apZ*apPW/(apRW||1))+')';
+  apo.z.textContent=Math.round(apZ/apFit()*100)+' %';
+}
+// on garde la page dans la vue : centrée tant qu'elle y tient, sinon bornée
+function apBorner(){
+  const r=apo.vue.getBoundingClientRect(), w=apPW*apZ, h=apPH*apZ;
+  apX = w<=r.width ? (r.width-w)/2 : Math.min(0, Math.max(r.width-w, apX));
+  apY = h<=r.height ? (r.height-h)/2 : Math.min(0, Math.max(r.height-h, apY));
+}
+function apAjuster(){
+  apZ=apFit(); apBorner(); apPlacer(); apRendreSiBesoin(0);
+}
+function apZoomer(k, cx, cy){
+  const f=apFit(), z=Math.max(f, Math.min(f*16, apZ*k));
+  if(Math.abs(z-apZ)<1e-6) return;
+  apX=cx-(cx-apX)*z/apZ; apY=cy-(cy-apY)*z/apZ; apZ=z;
+  apBorner(); apPlacer(); apRendreSiBesoin();
+}
+// le rendu en place suffit tant qu'il a plus de pixels que la page à l'écran
+function apRendreSiBesoin(ms){
+  const besoin=Math.round(apPW*apZ*Math.min(2, window.devicePixelRatio||1));
+  if(apRW>=besoin*0.98) return;
+  clearTimeout(apTrendu);
+  apTrendu=setTimeout(function(){ apRendre(apPage, besoin); }, ms==null?240:ms);
+}
+async function apRendre(i, largeur){
+  if(!SRC || i<0) return;
+  const budget=Math.floor(Math.sqrt(AP_MAXPX*apPW/apPH));
+  const w=Math.max(320, Math.min(largeur, AP_MAXW, budget));
+  if(w<=apRW) return;
+  const jeton=++apJeton;
+  const off=document.createElement('canvas');
+  off.width=w; off.height=1;
+  try{ await SRC.vignette(i, off); }catch(e){ console.warn(e); return; }
+  if(jeton!==apJeton || apPage!==i) return;      // zoom repris, ou fenêtre fermée
+  apo.cv.width=off.width; apo.cv.height=off.height;
+  apo.cv.getContext('2d').drawImage(off,0,0);
+  apRW=off.width; apo.att.classList.add('off'); apPlacer();
+}
+// La fenêtre se pose à côté de la liste des vignettes, jamais dessus : elle
+// masquerait les autres pages, et aller de l'une à l'autre demanderait d'en
+// sortir. On prend le côté le plus large ; à défaut le dessous ou le dessus ;
+// en dernier recours seulement, le milieu de l'écran.
+function apPoser(el){
+  const r=(el||acc.vig).getBoundingClientRect();
+  const dro=innerWidth-r.right-24, gau=r.left-24, cote=Math.max(dro,gau);
+  const bas=innerHeight-r.bottom-24, haut=r.top-24;
+  let w, h, x, y;
+  if(cote>=380){
+    w=Math.min(980, cote); h=Math.min(700, innerHeight-24);
+    x=(dro>=gau) ? r.right+12 : r.left-12-w;
+    y=Math.max(12, Math.min(r.top-48, innerHeight-h-12));
+  } else if(Math.max(bas,haut)>=260){
+    w=Math.min(980, innerWidth-24); h=Math.min(700, Math.max(bas,haut));
+    x=Math.max(12, Math.min(r.left, innerWidth-w-12));
+    y=(bas>=haut) ? r.bottom+12 : r.top-12-h;
+  } else {
+    w=Math.min(980, innerWidth-24); h=Math.min(700, innerHeight-24);
+    x=(innerWidth-w)/2; y=(innerHeight-h)/2;
+  }
+  apo.n.style.width=Math.round(w)+'px'; apo.n.style.height=Math.round(h)+'px';
+  apo.n.style.left=Math.round(x)+'px'; apo.n.style.top=Math.round(y)+'px';
+}
+async function apOuvrir(i, el){
+  if(!SRC) return;
+  clearTimeout(apTferme); apTferme=null;
+  const reprise=(apPage===i && apo.n.classList.contains('on'));
+  apPage=i; apo.n.classList.add('on'); apPoser(el);
+  apo.ttl.textContent=(SRC.kind==='pdf' ? 'Page '+(i+1) : 'Aperçu')+
+    (SRC.nom ? ' · '+SRC.nom : '');
+  const d=DIAGS[i]; apo.dg.innerHTML=d?badgeDiag(d):'';
+  if(reprise){ apBorner(); apPlacer(); return; }
+  apJeton++; apRW=0; apo.cv.width=1; apo.cv.height=1;
+  apo.att.classList.remove('off');
+  let dim=null;
+  try{ dim=await SRC.dims(i); }catch(e){ console.warn(e); }
+  if(apPage!==i || !dim) return;
+  apPW=dim.pw; apPH=dim.ph; apAjuster();
+}
+function apFermer(){
+  if(apPage<0 && !apo.n.classList.contains('on')) return;
+  apPage=-1; apJeton++; apTire=null;
+  clearTimeout(apTsurvol); clearTimeout(apTferme); clearTimeout(apTrendu);
+  apo.n.classList.remove('on'); apo.vue.classList.remove('tire');
+  apo.att.classList.remove('off');
+}
+// survol : on attend un peu avant d'ouvrir, et un peu avant de refermer — sans
+// quoi passer la souris sur la liste ouvrirait cinq fenêtres, et aller de la
+// vignette à la fenêtre la ferait disparaître en chemin
+function apSurvol(i, el){
+  clearTimeout(apTferme); apTferme=null; clearTimeout(apTsurvol);
+  if(apo.n.classList.contains('on')){ apOuvrir(i, el); return; }
+  apTsurvol=setTimeout(function(){ apOuvrir(i, el); }, 280);
+}
+function apQuitte(){
+  clearTimeout(apTsurvol); clearTimeout(apTferme);
+  apTferme=setTimeout(apFermer, 280);
+}
+apo.n.addEventListener('mouseenter', function(){ clearTimeout(apTferme); apTferme=null; });
+apo.n.addEventListener('mouseleave', apQuitte);
+apo.vue.addEventListener('wheel', function(e){
+  e.preventDefault();
+  const r=apo.vue.getBoundingClientRect();
+  apZoomer(Math.pow(1.0018, -e.deltaY), e.clientX-r.left, e.clientY-r.top);
+}, {passive:false});
+apo.vue.addEventListener('mousedown', function(e){
+  apTire={x:e.clientX, y:e.clientY, ax:apX, ay:apY};
+  apo.vue.classList.add('tire'); e.preventDefault();
+});
+window.addEventListener('mousemove', function(e){
+  if(!apTire) return;
+  apX=apTire.ax+(e.clientX-apTire.x); apY=apTire.ay+(e.clientY-apTire.y);
+  apBorner(); apPlacer();
+});
+window.addEventListener('mouseup', function(){
+  if(!apTire) return;
+  apTire=null; apo.vue.classList.remove('tire');
+});
+apo.vue.addEventListener('dblclick', apAjuster);
+document.getElementById('appop_fit').onclick=apAjuster;
+document.getElementById('appop_plus').onclick=function(){ apBouton(1.5); };
+document.getElementById('appop_moins').onclick=function(){ apBouton(1/1.5); };
+function apBouton(k){
+  const r=apo.vue.getBoundingClientRect();
+  apZoomer(k, r.width/2, r.height/2);
+}
+window.addEventListener('resize', function(){ if(apPage>=0) apFermer(); });
 
 // --- calques du DXF : mur / porte / ignoré ---
 const DXF_ROLES=[['mur','Mur'],['porte','Porte'],['ignore','Ignorer']];
@@ -4136,6 +4322,34 @@ function aimantePoint(x, y, autre, ctx, shift){
 }
 function roomInfo(c){ return D.rooms[c] || state.newRooms[c]; }
 
+// --- zones retirées du relevé ---
+// Le moteur sort toujours quelques cellules qui ne sont pas des locaux : un
+// vide de mur, une échancrure, le cadre d'un numéro. On les retire du relevé
+// sans les effacer — l'analyse, elle, les voit toujours, et un Ctrl+Z ou le
+// panneau doit pouvoir les ramener. Un espace tracé à la main, lui, s'efface
+// vraiment : rien d'autre ne le porte.
+function zoneSuppr(c){ return !!(state.suppr && state.suppr[c]); }
+function pairIgnoree(p){ return !!state.excluded[pairKey(p)]
+  || zoneSuppr(p.ca) || zoneSuppr(p.cb); }
+function supprimerZone(c){
+  const r=roomInfo(c);
+  if(!r) return;
+  const neuf=!!state.newRooms[c];
+  pushUndo();
+  if(neuf){ delete state.newRooms[c]; delete state.polys[c]; delete state.cats[c]; }
+  else state.suppr[c]=true;
+  if(selRoom===c) selRoom=null;
+  render(); panel();
+  toast(neuf?'Espace supprimé':'Zone retirée du relevé',
+        (r.num?r.num+' · ':'')+(r.name||'')+' — Ctrl+Z pour annuler');
+}
+function zonesRetirees(){ return Object.keys(state.suppr||{})
+  .filter(function(c){ return !!D.rooms[c]; }); }
+function retablirZones(){
+  if(!zonesRetirees().length) return;
+  pushUndo(); state.suppr={}; render(); panel();
+}
+
 // --- renommer un local détecté ---
 // Un nom lu sur des glyphes vectorisés garde parfois une lettre de travers, et
 // un numéro peut manquer son tiret : il faut pouvoir les reprendre. Le nom voyage
@@ -4266,6 +4480,7 @@ function drawHandles(s){
 function render(){
   svg.innerHTML='';
   for(const [c,pts] of Object.entries(state.polys)){
+    if(zoneSuppr(c)) continue;
     const cls='room'+((mode==='select'||mode==='rooms')?' clickable':'')
       +(selRoom===c?' sel':'')+(zonage?' zoned':'');
     const poly=el('polygon',{points:pts.map(p=>p.join(',')).join(' '),'class':cls});
@@ -4287,7 +4502,7 @@ function render(){
         stroke:'#ffd200','stroke-width':12,'stroke-linecap':'round','stroke-opacity':.85}));
   }
   for(const p of P){
-    const v=stcOf(p), col=colorOf(v), k=pairKey(p), ex=state.excluded[k];
+    const v=stcOf(p), col=colorOf(v), ex=pairIgnoree(p);
     let labeled=false;
     const segs=[...p.segments].sort((a,b)=>b.len_m-a.len_m);
     for(const s of segs){
@@ -4545,6 +4760,7 @@ window.addEventListener('keydown',e=>{
     return;
   }
   if(e.key==='Escape'){
+    if(apPage>=0) return apFermer();
     if(document.getElementById('kbdlay').classList.contains('on')) return aideClavier(false);
     if(document.querySelector('.menu.on,.pop.on')) return fermerMenus();
     if(state && (selRoom||selPair||selSeg||selPorte)){
@@ -4566,8 +4782,10 @@ window.addEventListener('keydown',e=>{
     pushUndo();
     if(selSeg.manual) state.manual=state.manual.filter(x=>x!==selSeg.s);
     else if(selSeg.pair) selSeg.pair.segments=selSeg.pair.segments.filter(x=>x!==selSeg.s);
-    selSeg=null; render(); panel();
-  }});
+    selSeg=null; render(); panel(); return;
+  }
+  if(selRoom) supprimerZone(selRoom);
+});
 // Ossature constante : la carte de l'objet selectionne, puis ce qui en depend,
 // puis les actions sur cet objet. Seul le contenu change, jamais l'ordre.
 function ech(t){ return String(t==null?'':t)
@@ -4769,7 +4987,8 @@ function panel(){
       '<span class="chip" style="background:'+catColor(cat)+';color:'+
         (sombreHex(catColor(cat))?'#fff':'#1b2440')+'">'+ech(cat)+'</span>',
       corps,
-      isNew?'<button class="warn" id="rdel">Supprimer cet espace</button>':'');
+      '<button class="warn" id="rdel" title="Suppr">'+
+        (isNew?'Supprimer cet espace':'Retirer cette zone du relevé')+'</button>');
     s.querySelectorAll('#catgrp button').forEach(function(b){ b.onclick=function(){
       pushUndo();
       state.cats[selRoom]=b.dataset.c;
@@ -4783,21 +5002,18 @@ function panel(){
       renommerPiece(selRoom, 'num', e.target.value); };
     s.querySelector('#rname').onchange=function(e){
       renommerPiece(selRoom, 'name', e.target.value); };
-    if(isNew){
-      s.querySelector('#rdel').onclick=function(){ pushUndo();
-        delete state.newRooms[selRoom]; delete state.polys[selRoom];
-        delete state.cats[selRoom]; selRoom=null; render(); panel(); };
-    }
+    s.querySelector('#rdel').onclick=function(){ supprimerZone(selRoom); };
     return;
   }
 
   // rien de selectionne : l'etat du relevé, puis par ou commencer
-  const nbCl=P.filter(function(q){ return !state.excluded[pairKey(q)]; }).length+state.manual.length;
-  const ml=P.reduce(function(a,q){ return state.excluded[pairKey(q)] ? a :
+  const nbCl=P.filter(function(q){ return !pairIgnoree(q); }).length+state.manual.length;
+  const ml=P.reduce(function(a,q){ return pairIgnoree(q) ? a :
       a+q.segments.reduce(function(b,x){ return b+x.len_m; },0); },0)
     +state.manual.reduce(function(a,m){ return a+m.len_m; },0);
   const nbPortes=(D.portes||[]).length+state.portes_man.length;
-  const nbPieces=Object.keys(state.cats).length;
+  const retirees=zonesRetirees().length;
+  const nbPieces=Object.keys(state.cats).length-retirees;
   s.innerHTML='<div class="card" style="padding:12px"><h3>Relevé en cours</h3>'+
     '<div style="display:flex;gap:8px;margin-top:12px">'+
     '<div class="stat"><b>'+nbCl+'</b><div class="muted" style="font-size:10.5px;margin-top:4px">'+
@@ -4806,13 +5022,27 @@ function panel(){
       'pièces classées</div></div>'+
     '<div class="stat"><b>'+nbPortes+'</b><div class="muted" style="font-size:10.5px;margin-top:4px">'+
       'portes</div></div></div></div>'+
+    (retirees?carteRetirees(retirees):'')+
     demarrage();
+  const rz=s.querySelector('#rzones');
+  if(rz) rz.onclick=retablirZones;
   s.querySelectorAll('.item[data-act]').forEach(function(it){ it.onclick=function(){
     const a=it.dataset.act;
     if(a==='weld') basculerMenu('pop_ac');
     else if(a==='scale') setMode('calib');
     else if(a==='door') setMode('select');
   }; });
+}
+// ce qui a été retiré du relevé se voit quelque part, sinon on ne sait plus
+// pourquoi le compte des pièces ne tombe pas juste
+function carteRetirees(n){
+  return '<div class="card" style="padding:12px;margin-top:16px">'+
+    '<h3>Zone'+(n>1?'s':'')+' retirée'+(n>1?'s':'')+'</h3>'+
+    '<div class="muted" style="margin-top:6px">'+n+' zone'+(n>1?'s':'')+
+    ' hors du relevé : ni contour, ni cloisons, ni métré. L\u2019analyse, elle, '+
+    'les connaît toujours.</div><div class="sel-actions">'+
+    '<button class="sec" id="rzones">Rétablir '+(n>1?'ces zones':'cette zone')+
+    '</button></div></div>';
 }
 // suggestions d'ordre de travail, deduites de l'etat reel du releve
 function demarrage(){
@@ -5350,7 +5580,7 @@ function matrixStc(p){ const key=[state.cats[p.ca],state.cats[p.cb]].sort().join
   return state.matrix[key] ?? 45; }
 function quantitesParSTC(){
   const map={};
-  for(const p of P){ if(state.excluded[pairKey(p)]) continue;
+  for(const p of P){ if(pairIgnoree(p)) continue;
     const v=stcOf(p), len=p.segments.reduce((a,s)=>a+s.len_m,0);
     (map[v]=map[v]||{ml:0,n:0}); map[v].ml+=len; map[v].n++; }
   for(const m of state.manual){ (map[m.stc]=map[m.stc]||{ml:0,n:0});
@@ -5360,6 +5590,7 @@ function quantitesParSTC(){
 function cloisonRows(){
   const rows=[];
   for(const p of P){ const k=pairKey(p);
+    if(zoneSuppr(p.ca)||zoneSuppr(p.cb)) continue;
     const len=Math.round(p.segments.reduce((a,s)=>a+s.len_m,0)*10)/10;
     if(len<=0) continue;
     const cp=compositePaire(p);
@@ -5457,7 +5688,7 @@ function expQtyCSV(){
 function majConformite(){
   const div=document.getElementById('conf'); if(!div||!state) return;
   const items=[];
-  for(const p of P){ const k=pairKey(p); if(state.excluded[k]) continue;
+  for(const p of P){ if(pairIgnoree(p)) continue;
     const r=compositePaire(p); if(!r.portes) continue;
     if(r.unspec) items.push({p, bad:false,
       t:p.a+' ↔ '+p.b+' · porte non renseignée',
@@ -5501,7 +5732,7 @@ function majConformite(){
 // barre d'etat : ce que contient le releve, en permanence sous les yeux
 function majStats(){
   const e=document.getElementById('sb_stats'); if(!e||!state) return;
-  const paires=P.filter(function(p){ return !state.excluded[pairKey(p)]; });
+  const paires=P.filter(function(p){ return !pairIgnoree(p); });
   const n=paires.length+state.manual.length;
   const ml=paires.reduce(function(a,p){ return a+p.segments.reduce(
       function(b,s){ return b+s.len_m; },0); },0)
@@ -5522,7 +5753,7 @@ function expDXF(){
   const o=[], w=(code,val)=>{ o.push(code); o.push(String(val)); };
   const aci={25:3,30:3,35:4,40:5,45:30,50:1,55:6,60:6};   // couleurs approx par STC
   const stcs=new Set();
-  for(const p of P) if(!state.excluded[pairKey(p)]) stcs.add(stcOf(p));
+  for(const p of P) if(!pairIgnoree(p)) stcs.add(stcOf(p));
   for(const m of state.manual) stcs.add(m.stc);
   const lstc=[...stcs].sort((a,b)=>a-b);
   w(0,'SECTION'); w(2,'HEADER'); w(9,'$ACADVER'); w(1,'AC1015'); w(0,'ENDSEC');
@@ -5535,11 +5766,12 @@ function expDXF(){
   const line=(p1,p2,lay)=>{ w(0,'LINE'); w(8,lay);
     w(10,MX(p1[0])); w(20,MY(p1[1])); w(30,0);
     w(11,MX(p2[0])); w(21,MY(p2[1])); w(31,0); };
-  for(const p of P){ const k=pairKey(p); if(state.excluded[k]) continue;
+  for(const p of P){ if(pairIgnoree(p)) continue;
     const lay='STC_'+stcOf(p); for(const s of p.segments) line(s.p1,s.p2,lay); }
   for(const m of state.manual) line(m.p1,m.p2,'STC_'+m.stc);
   if(portes_aff) for(const pm of state.portes_man) line([pm.x,pm.y],[pm.lx,pm.ly],'PORTES');
-  if(zonage) for(const pts of Object.values(state.polys)){
+  if(zonage) for(const [cz,pts] of Object.entries(state.polys)){
+    if(zoneSuppr(cz)) continue;
     w(0,'LWPOLYLINE'); w(8,'ZONES'); w(90,pts.length); w(70,1);
     for(const pt of pts){ w(10,MX(pt[0])); w(20,MY(pt[1])); } }
   w(0,'ENDSEC'); w(0,'EOF');
@@ -5548,7 +5780,7 @@ function expDXF(){
 }
 function legend(){
   const utilises={};
-  if(state) for(const p of P) if(!state.excluded[pairKey(p)]) utilises[stcOf(p)]=1;
+  if(state) for(const p of P) if(!pairIgnoree(p)) utilises[stcOf(p)]=1;
   if(state) for(const m of state.manual) utilises[m.stc]=1;
   document.getElementById('leg').innerHTML=
     '<div class="muted" style="margin-bottom:8px">En gras : les cibles présentes sur ce niveau.</div>'+
@@ -5659,6 +5891,7 @@ function dl(name,text,mime){ enregistrer(name, text, mime); }
 function expCSV(){
   let rows=[['Piece A','Nom A','Cat A','Piece B','Nom B','Cat B','Cible STC','Longueur (m)','Portes','Statut']];
   for(const p of P){ const k=pairKey(p);
+    if(zoneSuppr(p.ca)||zoneSuppr(p.cb)) continue;
     const len=Math.round(p.segments.reduce((a,s)=>a+s.len_m,0)*10)/10;
     rows.push([p.a,p.name_a,state.cats[p.ca],p.b,p.name_b,state.cats[p.cb],stcOf(p),len,
       p.portes||0,
@@ -5677,7 +5910,7 @@ function expCSV(){
 function etatValidation(){
   const geometry={}; for(const p of P) geometry[pairKey(p)]=p.segments;
   return {sheet:D.sheet,cats:state.cats,overrides:state.overrides,
-    excluded:state.excluded,matrix:state.matrix,geometry,noms:state.noms,
+    excluded:state.excluded,suppr:state.suppr,matrix:state.matrix,geometry,noms:state.noms,
     manual:state.manual,polys:state.polys,newRooms:state.newRooms,
     portes_man:state.portes_man,portes_etat:state.portesEtat,
     zonage,portes_aff,echelle:D.echelle,last_stc:lastSTC,last_stc_porte:lastSTCPorte,
@@ -5795,14 +6028,14 @@ async function expPPT(retour){
   s.addImage({data:document.getElementById('bg').src, x:ox, y:oy, w:pw, h:ph});
   // zonage
   if(zonage)
-    for(const [cid,pts] of Object.entries(state.polys))
+    for(const [cid,pts] of Object.entries(state.polys)){
+      if(zoneSuppr(cid)) continue;
       polyligne(pts,{fermer:true, props:{
         fill:{color:hx(catColor(state.cats[cid])), transparency:70},
-        line:{type:'none'}}});
+        line:{type:'none'}}}); }
   // cloisons + etiquettes
   for(const p of P){
-    const k=pairKey(p);
-    if(state.excluded[k]) continue;
+    if(pairIgnoree(p)) continue;
     const v=stcOf(p), col=colorOf(v);
     let lab=false;
     for(const seg of [...p.segments].sort((a,b)=>b.len_m-a.len_m)){
@@ -5875,7 +6108,8 @@ function applyState(j){
     document.getElementById('srvinfo').textContent=
       (D.vision_note||'')+finesseTxt()+' · 1/'+(D.echelle??100); }
   Object.assign(state.cats,j.cats||{}); state.overrides=j.overrides||{};
-  state.excluded=j.excluded||{}; Object.assign(state.matrix,j.matrix||{});
+  state.excluded=j.excluded||{}; state.suppr=j.suppr||{};
+  Object.assign(state.matrix,j.matrix||{});
   state.manual=(j.manual||[]); state.manual.forEach(segMeta);
   if(j.polys) state.polys=j.polys;
   state.newRooms=j.newRooms||{};
@@ -5907,6 +6141,7 @@ function impJSON(ev){ const f=ev.target.files[0]; if(!f)return;
 // la finesse n'existe que si une analyse a eu lieu : muette en relevé manuel
 function finesseTxt(){ return D && D.finesse!=null ? ' · finesse '+D.finesse : ''; }
 function ouvrirEditeur(payload, bgURL){
+  apFermer();
   D=payload;
   if(bgURL) document.getElementById('bg').src=bgURL;
   const c=payload.clip;
@@ -5917,7 +6152,7 @@ function ouvrirEditeur(payload, bgURL){
   initEditeur();
 }
 function initEditeur(){
-  state={cats:{}, overrides:{}, excluded:{}, matrix:{...D.matrix},
+  state={cats:{}, overrides:{}, excluded:{}, suppr:{}, matrix:{...D.matrix},
          manual:[], polys:JSON.parse(JSON.stringify(D.polys)), newRooms:{},
          portes_man:[], portesEtat:{}, noms:{}};
   for(const [c,r] of Object.entries(D.rooms)) state.cats[c]=r.cat;

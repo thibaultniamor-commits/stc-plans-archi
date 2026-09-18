@@ -34,6 +34,10 @@ double-clic.
   porte ; le cartouche (« 1 : 100 ») sert de recoupement, et la divergence est
   signalée. Le bouton *Détecter* renseigne le champ, et une échelle manifestement
   fausse est signalée à l'issue de l'analyse.
+- **Aperçu au survol** — survoler une vignette ouvre la planche en grand à côté
+  de la liste : molette pour zoomer sous le curseur, glisser pour déplacer,
+  double-clic pour revenir à la page entière. Le rendu se refait à la définition
+  du zoom, de quoi lire le cartouche et les libellés avant de lancer le moteur.
 - **Diagnostic avant analyse** — chaque page est examinée et reçoit un badge :
   *Vectoriel*, *Texte vectorisé* (libellés convertis en dessin : ils seront lus
   par reconnaissance de forme), *Sans texte* (aucun libellé exploitable : les
@@ -50,8 +54,11 @@ double-clic.
 - **Cibles STC par cloison** — une matrice éditable donne la cible de chaque
   couple de catégories ; chaque valeur peut être forcée cloison par cloison.
 - **Correction à la main** — tracer, déplacer, allonger ou supprimer une
-  cloison ; reprendre le contour d'une pièce ; **corriger le numéro et le nom
-  d'un local**, qui suivent jusque dans les cloisons, les métrés et les exports ;
+  cloison ; reprendre le contour d'une pièce ; **retirer du relevé une zone qui
+  n'en est pas une** (`Suppr`) — elle quitte le plan, le métré, la conformité et
+  les exports, sans disparaître de l'analyse, et se rétablit d'un bouton ;
+  **corriger le numéro et le nom d'un local**, qui suivent jusque dans les
+  cloisons, les métrés et les exports ;
   poser une porte et lui donner son STC ; calibrer l'échelle en deux clics sur
   une cote connue ; auto-connexion (redressement et soudure des extrémités) avec
   tolérance réglable. Annuler / rétablir sur toute la session.

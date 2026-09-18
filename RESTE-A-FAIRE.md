@@ -1,9 +1,11 @@
 # Ce qu'il reste à faire
 
-État au 2026-09-18, après la v2.4.0 (murs pochés, libellés vectorisés, échelle).
+État au 2026-09-18, après la v2.5.0 (aperçu au survol, retrait d'une zone) ;
+les mesures sont celles de la v2.4.0, le moteur n'ayant pas bougé depuis.
 Cette liste est un carnet de reprise : chaque entrée dit **ce qu'on observe**,
 **ce qu'on en sait déjà**, et **où ça se joue dans le code**. Les numéros de ligne
-renvoient à `src/outil_stc.src.html` au moment de la v2.4.0.
+renvoient à `src/outil_stc.src.html` au moment de la v2.4.0 — la v2.5.0 les a
+décalés d'une quarantaine de lignes à partir de `roomInfo`.
 
 ## Où on en est
 
@@ -21,7 +23,7 @@ Une planche 36 × 24 po s'analyse en ~8 à 16 s.
 
 ```
 node tests/verite.mjs index.html <plan.pdf> <verite.json> [finesse] [sortie.json]
-python tests/fixtures.py && node tests/banc.mjs     # 63 vérifications fonctionnelles
+python tests/fixtures.py && node tests/banc.mjs     # 77 vérifications fonctionnelles
 ```
 
 ---
@@ -121,6 +123,12 @@ donne aussi un décompte attendu des locaux, à comparer aux cellules retenues.
 faire pour les candidats), par la présence d'une porte, ou fusionner une cellule
 dont la frontière est presque entièrement partagée avec une seule voisine.
 
+**Depuis la v2.5.0**, le creux se retire à la main (`Suppr` sur la zone, ou le
+bouton du panneau) : c'est le contournement, pas la réparation. Ce que ces
+retraits disent est en revanche exploitable — l'état enregistré porte la liste
+des zones écartées (`suppr`), c'est-à-dire un corpus de faux positifs désignés
+par l'utilisateur, prêt à mesurer le tri automatique qui les remplacerait.
+
 ## 6. Les cloisons obliques sont cassées
 
 **Observé** : un mur en biais ressort en marches d'escalier.
@@ -175,7 +183,7 @@ et la netteté du mot-clé trouvé.
 point de l'étiquette, fusions, manques, écart de surface ; et, depuis la v2.4.0,
 justesse des libellés : numéros exacts, noms reconnus à travers les familles de
 formes, ressemblance moyenne, liste des noms à revoir) et `tests/banc.mjs`
-(63 vérifications fonctionnelles sur plans synthétiques).
+(77 vérifications fonctionnelles sur plans synthétiques).
 
 **Ce qui manque** :
 - l'appariement des **paires de locaux** et des **portes**, et un score résumé ;
@@ -201,6 +209,12 @@ formes, ressemblance moyenne, liste des noms à revoir) et `tests/banc.mjs`
   damier et relues d'un seul `getImageData` — mais elle tourne à chaque analyse,
   y compris quand on relance à une autre finesse. Un cache par page la rendrait
   gratuite à la relance.
+- L'aperçu au survol **refait toute la page** à chaque palier de zoom, alors que
+  seule la partie visible est regardée (`apRendre`). C'est ce qui permet un seul
+  chemin pour les quatre sources — `SRC.vignette` rend la page entière — mais un
+  rendu à 5 000 px coûte quelques secondes sur une grande planche. Rendre la
+  zone visible seule demanderait un `clip` par source : pdf.js le sait faire par
+  `transform`, `fondSVG` et `fondDXF` prennent déjà clip et échelle.
 - La **finesse** n'a presque plus d'effet : le même plan donne les mêmes locaux à
   2, 4 ou 6. Soit on la retire de l'interface, soit on lui redonne un rôle
   explicite (par exemple le seuil `AIRE_ANON`).

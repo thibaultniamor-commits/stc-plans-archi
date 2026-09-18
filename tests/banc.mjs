@@ -157,6 +157,39 @@ async function main() {
   verif('PDF vectoriel : diagnostic « vectoriel »', e.diags[0] === 'vectoriel', JSON.stringify(e.diags));
   verif('PDF vectoriel : badge sur la vignette', e.badges[0] === 'Vectoriel', JSON.stringify(e.badges));
   verif('PDF vectoriel : bouton Analyser propose', e.btnA && !e.btnM);
+
+  // 2a — apercu au survol d'une vignette : voir la planche, et zoomer dedans,
+  // avant de lancer le moteur. La vignette de 92 px ne dit pas quel niveau on tient.
+  await evalue(`(()=>{ document.querySelector('#vignettes .pg')
+    .dispatchEvent(new MouseEvent('mouseenter')); return true; })()`);
+  await dors(1600);
+  const ap1 = await evalue(`({on: document.getElementById('appop').classList.contains('on'),
+    visible: __visible('#appop_vue'), w: document.getElementById('appop_cv').width,
+    z: document.getElementById('appop_z').textContent, page: apPage})`);
+  verif('Apercu : le survol d\u2019une vignette ouvre la fenetre',
+    ap1.on && ap1.visible && ap1.page === 0, JSON.stringify(ap1));
+  verif('Apercu : la planche y est rendue en grand', ap1.w >= 600, JSON.stringify({ w: ap1.w }));
+  verif('Apercu : elle s\u2019ouvre ajustee a la fenetre', ap1.z === '100 %', ap1.z);
+  await evalue(`(()=>{ const v=document.getElementById('appop_vue');
+    const r=v.getBoundingClientRect();
+    v.dispatchEvent(new WheelEvent('wheel', {deltaY:-600, cancelable:true, bubbles:true,
+      clientX:r.left+r.width/2, clientY:r.top+r.height/2})); return true; })()`);
+  await dors(1600);
+  const ap2 = await evalue(`({z: document.getElementById('appop_z').textContent,
+    w: document.getElementById('appop_cv').width, k: apZ/apFit()})`);
+  verif('Apercu : la molette zoome', ap2.k > 1.4, JSON.stringify(ap2));
+  verif('Apercu : le rendu se refait a la definition du zoom',
+    ap2.w > ap1.w, JSON.stringify({ avant: ap1.w, apres: ap2.w }));
+  await evalue("document.getElementById('appop_fit').click()");
+  await dors(200);
+  verif('Apercu : « Ajuster » revient a la planche entiere',
+    (await evalue("document.getElementById('appop_z').textContent")) === '100 %',
+    await evalue("document.getElementById('appop_z').textContent"));
+  await evalue("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))");
+  await dors(200);
+  verif('Apercu : Echap referme la fenetre',
+    await evalue(`!document.getElementById('appop').classList.contains('on') && apPage===-1`));
+
   await evalue("lancerAnalyse(0, 4, 100)");
   await dors(3000);
   let p = await evalue('__plan()');
@@ -186,6 +219,43 @@ async function main() {
     (await evalue(`(()=>{ const c=Object.keys(D.rooms)[0];
        return D.rooms[c].name!=='Salle de contrôle'; })()`)),
     await evalue(`D.rooms[Object.keys(D.rooms)[0]].name`));
+  // 2c — retirer une zone : le moteur sort toujours des cellules qui ne sont
+  // pas des locaux (vide de mur, echancrure, cadre d'un numero). Suppr doit les
+  // enlever du releve — sans les effacer : l'analyse, elle, les voit toujours.
+  const zs = await evalue(`(()=>{
+    const c=String(D.pairs[0].ca);
+    const compte=()=>({polys:document.querySelectorAll('#ov polygon.room').length,
+      lignes:cloisonRows().filter(r=>r.p && (String(r.p.ca)===c||String(r.p.cb)===c)).length,
+      ml:Math.round(Object.values(quantitesParSTC()).reduce((a,q)=>a+q.ml,0)*10)/10});
+    selRoom=c; selPair=selSeg=selPorte=null; render(); panel();
+    const bouton=!!document.getElementById('rdel');
+    const av=compte();
+    window.dispatchEvent(new KeyboardEvent('keydown',{key:'Delete'}));
+    const ap=compte();
+    ap.marque=!!state.suppr[c]; ap.enregistre=!!(etatValidation().suppr||{})[c];
+    ap.moteur=!!D.rooms[c]; ap.sel=selRoom;
+    selRoom=null; panel();
+    ap.retablir=!!document.getElementById('rzones');
+    return {c, bouton, av, ap};
+  })()`);
+  verif('Zone : le panneau offre de la retirer', zs.bouton, JSON.stringify(zs.bouton));
+  verif('Zone : Suppr la retire du plan', zs.ap.polys === zs.av.polys - 1,
+    JSON.stringify({ av: zs.av.polys, ap: zs.ap.polys }));
+  verif('Zone : ses cloisons sortent du metre',
+    zs.av.lignes > 0 && zs.ap.lignes === 0 && zs.ap.ml < zs.av.ml,
+    JSON.stringify({ av: zs.av, ap: zs.ap }));
+  verif('Zone : le retrait est garde dans l\u2019etat enregistre',
+    zs.ap.marque && zs.ap.enregistre, JSON.stringify(zs.ap));
+  verif('Zone : le moteur la connait toujours', zs.ap.moteur, JSON.stringify(zs.ap.moteur));
+  verif('Zone : le panneau propose de la retablir', zs.ap.retablir, JSON.stringify(zs.ap));
+  await evalue("undo(); true");
+  await dors(200);
+  const zr = await evalue(`(()=>{ const c=String(D.pairs[0].ca);
+    return {marque: !!state.suppr[c],
+            polys: document.querySelectorAll('#ov polygon.room').length}; })()`);
+  verif('Zone : Ctrl+Z la ramene',
+    !zr.marque && zr.polys === zs.av.polys, JSON.stringify(zr));
+
   // 2b — la barre d'outils et ses menus, qu'un overflow:hidden rognait
   verif('barre d’outils : le dernier groupe tient dans la barre',
     (await evalue('__barre()')).debord <= 0, JSON.stringify(await evalue('__barre()')));
