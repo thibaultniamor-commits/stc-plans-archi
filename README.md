@@ -24,6 +24,15 @@ double-clic.
 - **Murs au trait ou en aplat plein** — un plan dont les murs sont pochés sans
   contour ressortait vide. Les aplats sombres, longs et minces sont maintenant
   relevés comme des murs, à leur épaisseur réelle.
+- **Cloisons obliques** — une cloison en biais était rabattue sur l'horizontale
+  ou la verticale, et en ressortait redressée de travers. L'outil retrouve sous
+  chaque cloison le trait que la CAO a dessiné, et lui rend sa pente et sa
+  longueur vraies ; un mur en double trait n'est plus compté deux fois dans le
+  métré.
+- **Le même relevé à toutes les échelles** — le moteur raisonne en mètres, pas
+  en pixels : la même planche dessinée à 1/50, à 1/100 ou à 1/200 rend le même
+  relevé, aux mêmes surfaces. La définition de son image de travail s'adapte à
+  l'échelle du plan, dans les limites de la mémoire.
 - **Libellés vectorisés lus par reconnaissance de forme** — quand l'export a
   converti les textes en dessin, les lettres sont reconnues à leur silhouette,
   comparée à un alphabet que le navigateur dessine lui-même : rien à installer,
@@ -128,8 +137,9 @@ python build.py
 `tests/banc.mjs` ouvre `index.html` dans Chrome headless et fait passer chaque
 format d'entrée par le vrai chemin de l'outil — chargement, diagnostic, analyse,
 relevé manuel — sur des plans d'essai **synthétiques** : un même bâtiment décliné
-en DXF (millimètres et mètres), SVG, PDF vectoriel, PDF à murs pochés (à 1/100 et
-à 1/50, pour la déduction d'échelle), PDF scanné et PNG.
+en DXF (millimètres et mètres), SVG, PDF vectoriel, PDF à murs pochés (à 1/50,
+1/100 et 1/200 — le même dessin, pour la déduction d'échelle et l'invariance des
+seuils), PDF scanné et PNG ; plus un petit plan coupé par un refend oblique.
 
 ```
 pip install pymupdf        # une fois

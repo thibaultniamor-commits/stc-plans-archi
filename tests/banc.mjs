@@ -335,6 +335,55 @@ async function main() {
     await evalue("retourAccueil()");
   }
 
+  // 2f — le meme batiment a trois echelles. Les seuils du moteur se comptaient
+  // en pixels du raster, et le raster en points : le meme plan dessine a 1/50
+  // passait sous une loupe deux fois plus forte qu'a 1/200, et n'y donnait pas
+  // le meme releve. `plan_poche_{50,100,200}.pdf` sont le meme dessin, a la
+  // marge et au lettrage pres, qui sont eux en unites de plan et de papier.
+  const parEchelle = {};
+  for (const [fx, ech] of [['plan_poche.pdf', 100], ['plan_poche_50.pdf', 50],
+                           ['plan_poche_200.pdf', 200]]) {
+    await evalue(`(async()=>chargerPlan(await __fx('${fx}')))()`);
+    await dors(1800);
+    await evalue(`lancerAnalyse(0, 4, ${ech})`);
+    await dors(6000);
+    parEchelle[ech] = await evalue('__plan()');
+    await evalue("retourAccueil()");
+  }
+  const ref = parEchelle[100];
+  for (const ech of [50, 200]) {
+    const q = parEchelle[ech];
+    verif('Invariance : a 1/' + ech + ', autant de locaux et de cloisons qu\u2019a 1/100',
+      !!q && !!ref && q.rooms === ref.rooms && q.pairs === ref.pairs,
+      JSON.stringify({ ref: ref && [ref.rooms, ref.pairs], vu: q && [q.rooms, q.pairs] }));
+    verif('Invariance : a 1/' + ech + ', les memes surfaces qu\u2019a 1/100',
+      !!q && !!ref && Math.abs(q.aireMed - ref.aireMed) / ref.aireMed < 0.03,
+      JSON.stringify({ ref: ref && ref.aireMed, vu: q && q.aireMed }));
+  }
+
+  // 2g — cloison oblique. Une cloison qui n'est ni horizontale ni verticale
+  // etait rabattue sur l'axe dominant de sa bande de pixels : le refend a 26,6
+  // degres de la verticale ressortait vertical, et coupe en deux morceaux — un
+  // par face du mur. On suit desormais le trait vecteur qui l'a dessinee.
+  await evalue("(async()=>chargerPlan(await __fx('plan_biais.pdf')))()");
+  await dors(1800);
+  await evalue("lancerAnalyse(0, 4, 100)");
+  await dors(6000);
+  const biais = await evalue(`(()=>{ if(!D || !D.pairs.length) return null;
+    const p=D.pairs[0], s=p.segments[0];
+    return {pairs:D.pairs.length, rooms:Object.keys(D.rooms).length,
+            n:p.segments.length, len:p.len_m,
+            deg:Math.round(Math.atan2(s.p2[1]-s.p1[1], s.p2[0]-s.p1[0])*180/Math.PI)};
+  })()`);
+  verif('Biais : les deux locaux et leur cloison sont vus',
+    !!biais && biais.rooms === 2 && biais.pairs === 1, JSON.stringify(biais));
+  verif('Biais : la cloison suit la pente du refend (-63\u00b0)',
+    !!biais && Math.abs(Math.abs(biais.deg) - 63.4) <= 4, JSON.stringify(biais));
+  verif('Biais : elle sort en un seul trace, a sa longueur vraie (13,4 m)',
+    !!biais && biais.n === 1 && Math.abs(biais.len - 13.4) <= 0.7,
+    JSON.stringify(biais));
+  await evalue("retourAccueil()");
+
   // 2e — lecture des etiquettes : numero, nom dessous, surface dessous.
   // Les cas durs viennent des glyphes vectorises : les chiffres y respirent plus
   // que les lettres (« 11 » sortait « 1 1 »), et le tiret d'un sous-local se perd.

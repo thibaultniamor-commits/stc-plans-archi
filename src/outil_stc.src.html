@@ -1085,7 +1085,34 @@ const RULES = JSON.parse(document.getElementById('regles').textContent);
 
 // ================== moteur (portage JS de moteur_stc.py) ==================
 const MOTEUR = (() => {
-const RSCALE = 2;
+// ---- definition du raster ----
+// Le moteur analyse une image de la planche. Sa definition etait fixee en
+// points — deux pixels par point — si bien que le meme batiment occupait deux
+// fois plus de pixels dessine a 1/50 qu'a 1/100, et deux fois moins a 1/200 :
+// tous les seuils comptes en pixels changeaient de sens avec l'echelle. On fixe
+// donc la definition en *pixels par metre*. Le batiment fait desormais le meme
+// nombre de pixels quelle que soit l'echelle a laquelle il est dessine, et les
+// seuils geometriques s'expriment tous en metres.
+//
+// PXM_REF est la definition a laquelle le moteur a ete regle — RSCALE = 2 a
+// 1/100 — et reste celle qu'on vise : les valeurs en metres du moteur sont
+// exactement les anciennes valeurs en pixels, relues a cette definition.
+const PXM_REF = 2 * (72 / 25.4 * 1000 / 100);   // 56,7 px/m
+const PXM_MIN = 15;            // en dessous, un mur de 0,15 m ne fait plus 2 px
+const PX_BUDGET = 12e6;        // plafond du raster : le moteur en tient 12 copies
+const RS_MIN = 0.25, RS_MAX = 8;
+// Combien de pixels par point, pour une planche de wPt x hPt points a cette
+// echelle. La memoire plafonne : une planche 36 x 24 po depasse la dizaine de
+// millions de pixels des qu'on monte.
+function resolution(ptPerM, wPt, hPt){
+  let rs = PXM_REF / ptPerM;
+  const px = () => Math.floor(wPt*rs) * Math.floor(hPt*rs);
+  if(px() > PX_BUDGET) rs *= Math.sqrt(PX_BUDGET / px());
+  rs = Math.min(RS_MAX, Math.max(RS_MIN, Math.round(rs*1000)/1000));
+  return {rs, pxPerM: ptPerM*rs};
+}
+// Simplification du contour d'une piece : 2,5 px a la definition de reference.
+const SIMPLIF_M = 0.044;
 // Surface minimale d'une cellule qu'on garde comme local faute d'étiquette
 // lisible. Un rangement fait 4 m², un sanitaire 6 m² : au-dessus de ~2 m² on a
 // affaire à un local, en dessous à un meuble ou à un cartouche.
@@ -1378,10 +1405,11 @@ function polyDe(lab, id, bbx, W, clip){
     const d=(c[i][0]-c[0][0])**2+(c[i][1]-c[0][1])**2;
     if(d>fd){fd=d;far=i;}
   }
-  const p1=dpSimplify(c.slice(0,far+1),2.5), p2=dpSimplify(c.slice(far),2.5);
+  const eps=Math.max(1, SIMPLIF_M*clip.pxPerM), rs=clip.rs;
+  const p1=dpSimplify(c.slice(0,far+1),eps), p2=dpSimplify(c.slice(far),eps);
   const out=p1.concat(p2.slice(1,-1));
-  return out.map(([x,y])=>[Math.round((x/RSCALE+clip.x0)*10)/10,
-                           Math.round((y/RSCALE+clip.y0)*10)/10]);
+  return out.map(([x,y])=>[Math.round((x/rs+clip.x0)*10)/10,
+                           Math.round((y/rs+clip.y0)*10)/10]);
 }
 
 // ---- portes (arcs de battement) ----
@@ -1427,6 +1455,9 @@ function arcInfo(pts, cx, cy){
 function detecterPortes(drawings, clip, ptPerM, large){
   const RMIN=large?0.16:0.30, RMAX=large?5.6:1.40;
   const RMIN2=large?0.18:0.35, RMAX2=large?5.4:1.35;
+  // La corde d'un battant grandit avec l'echelle : ces deux seuils se prennent
+  // en metres, sans quoi un plan a 1/50 casse la chaine des arcs en morceaux.
+  const CORDE=0.32*ptPerM, MEMECENTRE=0.105*ptPerM;
   const frags=[];
   // Les arcs se chaînent sur la géométrie, pas sur les sous-chemins : beaucoup
   // d'exports CAO écrivent chaque segment en « moveTo/lineTo » et dessinent les
@@ -1442,7 +1473,7 @@ function detecterPortes(drawings, clip, ptPerM, large){
       if(!it) continue;
       let [x1,y1,x2,y2]=it;
       const Ls=Math.hypot(x2-x1,y2-y1);
-      if(Ls>9 || Ls<1e-6){ if(Ls>9) fin(); continue; }
+      if(Ls>CORDE || Ls<1e-6){ if(Ls>CORDE) fin(); continue; }
       if(cur.length>=2){
         const n=cur.length, [px,py]=cur[n-1];
         // le segment peut arriver retourné d'un émetteur à l'autre
@@ -1475,7 +1506,8 @@ function detecterPortes(drawings, clip, ptPerM, large){
   for(const fr of frags){
     let g=null;
     for(const q of groupes)
-      if(Math.abs(q.cx-fr.cx)<3 && Math.abs(q.cy-fr.cy)<3 && Math.abs(q.r-fr.r)/fr.r<0.12){ g=q; break; }
+      if(Math.abs(q.cx-fr.cx)<MEMECENTRE && Math.abs(q.cy-fr.cy)<MEMECENTRE
+         && Math.abs(q.r-fr.r)/fr.r<0.12){ g=q; break; }
     if(g) g.pts.push(...fr.ch);
     else groupes.push({cx:fr.cx,cy:fr.cy,r:fr.r,pts:fr.ch.slice()});
   }
@@ -1690,22 +1722,174 @@ function ccPixels(pixels, W){
   }
   return comps;
 }
-function runsDe(pixels, W, GAP, px2m, clip){
+// ---- le trait d'origine sous une bande d'adjacence ----
+// Les pixels de mur partages par deux pieces sont reprojetes sur un axe pour en
+// faire un segment de cloison, et cet axe etait forcement horizontal ou
+// vertical : une cloison en biais en ressortait en marches d'escalier, ou
+// redressee de travers. Le plan sait pourtant ou elle va — elle a ete dessinee
+// comme un segment vecteur. On retrouve donc, sous la bande de pixels, le trait
+// qui l'a produite, et c'est sa direction qu'on suit. Sans trait dessous, rien
+// ne change : on retombe sur l'axe dominant d'avant.
+const AXE_TOL_M = 0.30;      // un mur de 0,60 m reste sous son propre trait
+const AXE_PART = 0.55;       // part des pixels qu'un trait doit porter
+// Un trait a moins de 2,5 degres d'un axe est un trait d'axe : on le redresse.
+// Sans ce cran, le bruit d'export sortirait des cloisons a un demi-degre, que
+// l'auto-connexion de l'editeur laisse intactes parce qu'elle les croit obliques.
+const AXE_SNAP = Math.cos(2.5*Math.PI/180);
+
+function distSeg(px, py, s){
+  const vx=s[2]-s[0], vy=s[3]-s[1], L2=vx*vx+vy*vy;
+  const t=L2===0?0:Math.max(0,Math.min(1,((px-s[0])*vx+(py-s[1])*vy)/L2));
+  return Math.hypot(px-(s[0]+t*vx), py-(s[1]+t*vy));
+}
+// Les murs rendus cherchables au point pres : une grille d'une maille, ou chaque
+// trait depose sa trace.
+function indexMurs(murs, maille){
+  const g=new Map();
+  murs.forEach((s,k)=>{
+    const L=Math.hypot(s[2]-s[0], s[3]-s[1]);
+    const n=Math.max(1, Math.ceil(2*L/maille));
+    for(let t=0;t<=n;t++){
+      const x=s[0]+(s[2]-s[0])*t/n, y=s[1]+(s[3]-s[1])*t/n;
+      const c=Math.floor(x/maille)+'_'+Math.floor(y/maille);
+      let a=g.get(c);
+      if(!a){ a=new Set(); g.set(c,a); }
+      a.add(k);
+    }
+  });
+  return {g, maille, murs};
+}
+// Le trait le mieux porte par ces pixels, et la direction unitaire a suivre.
+// On juge sur un echantillon — quatre cents pixels suffisent a designer un
+// trait, et une bande de cloison en compte des milliers.
+function axeSousBande(pixels, W, clip, idx, tolPt){
+  if(!idx || !idx.murs.length) return null;
+  const rs=clip.rs, m=idx.maille;
+  const pas=Math.max(1, Math.floor(pixels.length/400)), ech=[];
+  for(let i=0;i<pixels.length;i+=pas){
+    const q=pixels[i], x=q%W, y=(q-x)/W;
+    ech.push([x/rs+clip.x0, y/rs+clip.y0]);
+  }
+  const cand=new Set();
+  for(const [x,y] of ech){
+    const ci=Math.floor(x/m), cj=Math.floor(y/m);
+    for(let a=-1;a<=1;a++) for(let b=-1;b<=1;b++){
+      const c=idx.g.get((ci+a)+'_'+(cj+b));
+      if(c) for(const k of c) cand.add(k);
+    }
+  }
+  let best=null, bn=0;
+  for(const k of cand){
+    const seg=idx.murs[k];
+    let nb=0;
+    for(const [x,y] of ech) if(distSeg(x,y,seg)<=tolPt) nb++;
+    if(nb>bn){ bn=nb; best=seg; }
+  }
+  if(!best || bn < AXE_PART*ech.length) return null;
+  const L=Math.hypot(best[2]-best[0], best[3]-best[1]);
+  if(L<1e-6) return null;
+  let ux=(best[2]-best[0])/L, uy=(best[3]-best[1])/L;
+  if(Math.abs(ux)>=AXE_SNAP){ ux=1; uy=0; }
+  else if(Math.abs(uy)>=AXE_SNAP){ ux=0; uy=1; }
+  return {u:[ux,uy], seg:best};
+}
+// Une bande peut suivre plusieurs traits : deux pieces separees par un mur en L,
+// un retour d'angle, une cloison qui se casse. On prend le trait le mieux porte,
+// on en tire ses segments, et on recommence sur ce qui reste.
+function runsParAxes(pixels, W, GAP, px2m, clip, idx, tolPt, minPx){
+  let reste=pixels, out=[];
+  for(let tour=0; tour<4 && reste.length>=minPx; tour++){
+    const a=axeSousBande(reste, W, clip, idx, tolPt);
+    if(!a) break;
+    const porte=[], hors=[];
+    for(const i of reste){
+      const x=i%W, y=(i-x)/W;
+      (distSeg(x/clip.rs+clip.x0, y/clip.rs+clip.y0, a.seg)<=tolPt ? porte : hors).push(i);
+    }
+    if(porte.length<minPx) break;
+    out=out.concat(runsDe(porte, W, GAP, px2m, clip, a.u));
+    reste=hors;
+  }
+  if(reste.length>=minPx) out=out.concat(runsDe(reste, W, GAP, px2m, clip, null));
+  return out;
+}
+// Un mur dessine en double trait donne deux bandes de pixels separees — une par
+// face — donc deux cloisons jumelles pour la meme paire de pieces, et un metre
+// qui compte le mur deux fois. Deux traces paralleles, distantes de moins d'une
+// epaisseur de mur et qui se recouvrent, n'en font qu'un. Ce tri n'etait pas
+// tenable tant que les traces etaient rabattues sur H ou V : deux faces d'un mur
+// oblique en sortaient toutes deux verticales, impossibles a reconnaitre pour ce
+// qu'elles etaient.
+const JUM_COS = Math.cos(6*Math.PI/180);
+function fusionnerRuns(segs, ptPerM){
+  if(segs.length<2) return segs;
+  const EP_MAX=0.55*ptPerM;        // au-dela, ce sont deux murs, pas deux faces
+  const dir=s=>{ const dx=s.p2[0]-s.p1[0], dy=s.p2[1]-s.p1[1];
+                 const L=Math.hypot(dx,dy)||1; return [dx/L, dy/L]; };
+  const ordre=segs.map((_,i)=>i).sort((a,b)=>segs[b].len_m-segs[a].len_m);
+  const pris=new Array(segs.length).fill(false), out=[];
+  for(const i of ordre){
+    if(pris[i]) continue;
+    pris[i]=true;
+    const [ux,uy]=dir(segs[i]), o=segs[i].p1;
+    const proj=p=>[(p[0]-o[0])*ux+(p[1]-o[1])*uy, (p[1]-o[1])*ux-(p[0]-o[0])*uy];
+    const membres=[segs[i]];
+    let a0=proj(segs[i].p1)[0], a1=proj(segs[i].p2)[0];
+    if(a1<a0){ const t=a0; a0=a1; a1=t; }
+    for(const j of ordre){
+      if(pris[j]) continue;
+      const [vx,vy]=dir(segs[j]);
+      if(Math.abs(ux*vx+uy*vy) < JUM_COS) continue;
+      const [b0,e0]=proj(segs[j].p1), [b1,e1]=proj(segs[j].p2);
+      if(Math.abs(e0)>EP_MAX || Math.abs(e1)>EP_MAX) continue;
+      const lo=Math.min(b0,b1), hi=Math.max(b0,b1);
+      if(Math.min(a1,hi)-Math.max(a0,lo) < 0.5*Math.min(a1-a0, hi-lo)) continue;
+      pris[j]=true; membres.push(segs[j]);
+      a0=Math.min(a0,lo); a1=Math.max(a1,hi);
+    }
+    if(membres.length===1){ out.push(segs[i]); continue; }
+    // le fil du mur : la mediane des ecarts de ses faces, jamais leur moyenne
+    const ec=[];
+    for(const m of membres) ec.push(proj(m.p1)[1], proj(m.p2)[1]);
+    ec.sort((x,y)=>x-y);
+    const e=ec[ec.length>>1];
+    const pt=t=>[Math.round((o[0]+t*ux-e*uy)*10)/10, Math.round((o[1]+t*uy+e*ux)*10)/10];
+    const seg={p1:pt(a0), p2:pt(a1), len_m:Math.round((a1-a0)/ptPerM*10)/10,
+               horiz:Math.abs(ux)>=Math.abs(uy)};
+    seg.cx=Math.round((seg.p1[0]+seg.p2[0])/2*10)/10;
+    seg.cy=Math.round((seg.p1[1]+seg.p2[1])/2*10)/10;
+    out.push(seg);
+  }
+  return out;
+}
+// `u` est la direction a suivre ; sans elle, l'axe dominant de la bande, comme
+// avant. Les pixels se projettent dessus (abscisse curviligne) et sur sa
+// perpendiculaire (ecart au fil du mur) ; on coupe sur les trous de la premiere
+// et on prend la mediane de la seconde — jamais la moyenne, qu'une echancrure
+// tirerait de cote.
+function runsDe(pixels, W, GAP, px2m, clip, u){
   const xs=pixels.map(i=>i%W), ys=pixels.map(i=>(i-i%W)/W);
-  const horiz=(Math.max(...xs)-Math.min(...xs)) >= (Math.max(...ys)-Math.min(...ys));
-  const prim=horiz?xs:ys, sec=horiz?ys:xs;
+  let ux, uy;
+  if(u){ ux=u[0]; uy=u[1]; }
+  else {
+    const h=(Math.max(...xs)-Math.min(...xs)) >= (Math.max(...ys)-Math.min(...ys));
+    ux=h?1:0; uy=h?0:1;
+  }
+  const prim=xs.map((x,i)=>x*ux+ys[i]*uy), sec=xs.map((x,i)=>ys[i]*ux-x*uy);
   const o=prim.map((_,i)=>i).sort((a,b)=>prim[a]-prim[b]);
   const p=o.map(i=>prim[i]), s=o.map(i=>sec[i]);
-  const toPt=(x,y)=>[Math.round((x/RSCALE+clip.x0)*10)/10, Math.round((y/RSCALE+clip.y0)*10)/10];
+  const rs=clip.rs;
+  const toPt=(x,y)=>[Math.round((x/rs+clip.x0)*10)/10, Math.round((y/rs+clip.y0)*10)/10];
   const out=[]; let st=0;
   for(let i=1;i<=p.length;i++){
     if(i===p.length || p[i]-p[i-1] > GAP){
       const pp=p.slice(st,i), ss=s.slice(st,i).sort((a,b)=>a-b);
       const lm=(pp[pp.length-1]-pp[0])*px2m;
       if(lm >= 0.4){
-        const mid=ss[Math.floor(ss.length/2)];
-        const a=horiz?[pp[0],mid]:[mid,pp[0]], b=horiz?[pp[pp.length-1],mid]:[mid,pp[pp.length-1]];
-        const seg={p1:toPt(a[0],a[1]), p2:toPt(b[0],b[1]), len_m:Math.round(lm*10)/10, horiz};
+        const mid=ss[Math.floor(ss.length/2)], q0=pp[0], q1=pp[pp.length-1];
+        const a=[q0*ux-mid*uy, q0*uy+mid*ux], b=[q1*ux-mid*uy, q1*uy+mid*ux];
+        const seg={p1:toPt(a[0],a[1]), p2:toPt(b[0],b[1]), len_m:Math.round(lm*10)/10,
+                   horiz:Math.abs(ux)>=Math.abs(uy)};
         seg.cx=Math.round((seg.p1[0]+seg.p2[0])/2*10)/10;
         seg.cy=Math.round((seg.p1[1]+seg.p2[1])/2*10)/10;
         out.push(seg);
@@ -1974,14 +2158,30 @@ async function analyser(extr, finesse, echelle, progress){
   }
   for(const q of poches) for(const p of q.poly){ xs.push(p[0]); ys.push(p[1]); }
   if(!xs.length) throw new Error('Aucun trait de mur détecté (PDF non vectoriel ?)');
+  // La marge autour du bati : 40 points, c'est-a-dire 1,4 m a 1/100 — mais
+  // 0,7 m a 1/50 et 2,8 m a 1/200. Elle se prend donc en metres, et il lui faut
+  // de quoi loger la fermeture d'emprise (0,53 m) sans que le batiment ne touche
+  // le bord du raster : sinon le vide entre le bati et le bord cesse de
+  // communiquer avec le dehors, et ressort en pieces fantomes. On ne la rogne
+  // plus a la feuille : le fond de plan se rend en blanc au-dela.
+  const MARGE=1.4*ptPerM;
   const clip = {
-    x0: Math.max(0, Math.min(...xs)-40), y0: Math.max(0, Math.min(...ys)-40),
-    x1: Math.min(extr.pw, Math.max(...xs)+40), y1: Math.min(extr.ph, Math.max(...ys)+40)
+    x0: Math.min(...xs)-MARGE, y0: Math.min(...ys)-MARGE,
+    x1: Math.max(...xs)+MARGE, y1: Math.max(...ys)+MARGE
   };
   clip.w=clip.x1-clip.x0; clip.h=clip.y1-clip.y0;
   clip.contient=(x,y)=>x>=clip.x0&&x<=clip.x1&&y>=clip.y0&&y<=clip.y1;
 
-  const W=Math.floor(clip.w*RSCALE), H=Math.floor(clip.h*RSCALE), N=W*H;
+  // Tout ce qui suit se compte en pixels du raster ; `enPx` est le seul passage
+  // des metres aux pixels, et `clip` porte la definition pour les fonctions du
+  // module qui en ont besoin (polyDe, runsDe).
+  const {rs:RS, pxPerM} = resolution(ptPerM, clip.w, clip.h);
+  clip.rs = RS; clip.pxPerM = pxPerM;
+  const enPx = m => m*pxPerM;
+  const W=Math.floor(clip.w*RS), H=Math.floor(clip.h*RS), N=W*H;
+  if(pxPerM < PXM_MIN)
+    notes.push('planche trop large pour son echelle : raster a '+
+      Math.round(pxPerM)+' px/m, releve plus grossier');
 
   await say('Portes et ouvertures…');
   // Les arcs de battement sont repérés avant les masques : ce ne sont pas des
@@ -1999,10 +2199,11 @@ async function analyser(extr, finesse, echelle, progress){
         gArcs.get(k).push([p.x,p.y,r]);
       }
   }
+  const TOL_ARC=0.056*ptPerM;
   const surArc=(x1,y1,x2,y2)=>{
     const mx=(x1+x2)/2, my=(y1+y2)/2;
     for(const [cx,cy,r] of gArcs.get(Math.floor(mx/CP)+'_'+Math.floor(my/CP))||[])
-      if(Math.abs(Math.hypot(x1-cx,y1-cy)-r)<1.6 && Math.abs(Math.hypot(x2-cx,y2-cy)-r)<1.6)
+      if(Math.abs(Math.hypot(x1-cx,y1-cy)-r)<TOL_ARC && Math.abs(Math.hypot(x2-cx,y2-cy)-r)<TOL_ARC)
         return true;
     return false;
   };
@@ -2020,9 +2221,16 @@ async function analyser(extr, finesse, echelle, progress){
   });
   const trait=(g,lw,x1,y1,x2,y2)=>{
     g.lineWidth=lw; g.beginPath();
-    g.moveTo((x1-clip.x0)*RSCALE,(y1-clip.y0)*RSCALE);
-    g.lineTo((x2-clip.x0)*RSCALE,(y2-clip.y0)*RSCALE); g.stroke();
+    g.moveTo((x1-clip.x0)*RS,(y1-clip.y0)*RS);
+    g.lineTo((x2-clip.x0)*RS,(y2-clip.y0)*RS); g.stroke();
   };
+  // Epaisseur du trait peint dans les masques : 3 et 5 px a la definition de
+  // reference, mais c'est bien une epaisseur sur le plan — un trait qui double
+  // a 1/50 souderait les pieces etroites.
+  const LWM=Math.max(2, Math.round(enPx(0.053)));
+  const LWP=Math.max(3, Math.round(enPx(0.088)));
+  // Longueur minimale d'un trait fin repeche comme cloison, puis comme barriere.
+  const LFIN=0.21*ptPerM, LFIN2=0.42*ptPerM;
   const sDoor=murMin*0.55;
   const fins=[];
   for(const d of sombres){
@@ -2042,16 +2250,16 @@ async function analyser(extr, finesse, echelle, progress){
       const axe=Math.abs(x1-x2)<0.5||Math.abs(y1-y2)<0.5;
       if(wall){
         murs.push(s);
-        trait(cv[0][1],3,x1,y1,x2,y2); trait(cv[1][1],3,x1,y1,x2,y2);
-        trait(cv[2][1],3,x1,y1,x2,y2); trait(cv[3][1],3,x1,y1,x2,y2);
+        trait(cv[0][1],LWM,x1,y1,x2,y2); trait(cv[1][1],LWM,x1,y1,x2,y2);
+        trait(cv[2][1],LWM,x1,y1,x2,y2); trait(cv[3][1],LWM,x1,y1,x2,y2);
       }
       else if(door){
         if(surArc(x1,y1,x2,y2)) continue;
-        trait(cv[0][1],5,x1,y1,x2,y2);
+        trait(cv[0][1],LWP,x1,y1,x2,y2);
       }
-      else if(thin && L>=6 && axe && cloisonsFines.has(s)){
-        trait(cv[0][1],3,x1,y1,x2,y2);
-        if(L>=12){ trait(cv[1][1],3,x1,y1,x2,y2); trait(cv[2][1],3,x1,y1,x2,y2); }
+      else if(thin && L>=LFIN && axe && cloisonsFines.has(s)){
+        trait(cv[0][1],LWM,x1,y1,x2,y2);
+        if(L>=LFIN2){ trait(cv[1][1],LWM,x1,y1,x2,y2); trait(cv[2][1],LWM,x1,y1,x2,y2); }
       }
     }
   }
@@ -2059,9 +2267,9 @@ async function analyser(extr, finesse, echelle, progress){
   // son axe. Son axe ne sert qu'aux linteaux, qui raisonnent sur des bouts de mur.
   const remplir=(g,poly)=>{
     g.fillStyle='#fff'; g.beginPath();
-    g.moveTo((poly[0][0]-clip.x0)*RSCALE,(poly[0][1]-clip.y0)*RSCALE);
+    g.moveTo((poly[0][0]-clip.x0)*RS,(poly[0][1]-clip.y0)*RS);
     for(let i=1;i<poly.length;i++)
-      g.lineTo((poly[i][0]-clip.x0)*RSCALE,(poly[i][1]-clip.y0)*RSCALE);
+      g.lineTo((poly[i][0]-clip.x0)*RS,(poly[i][1]-clip.y0)*RS);
     g.closePath(); g.fill();
   };
   for(const q of poches){
@@ -2075,7 +2283,7 @@ async function analyser(extr, finesse, echelle, progress){
   };
   const wallpix=lire(cv[1]), murpix=lire(cv[3]);
   const murAu=(x,y)=>{
-    const px=Math.round((x-clip.x0)*RSCALE), py=Math.round((y-clip.y0)*RSCALE);
+    const px=Math.round((x-clip.x0)*RS), py=Math.round((y-clip.y0)*RS);
     if(px<1||py<1||px>=W-1||py>=H-1) return false;
     for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++)
       if(murpix[(py+dy)*W+px+dx]) return true;
@@ -2110,9 +2318,9 @@ async function analyser(extr, finesse, echelle, progress){
   // un trou d'un pixel, et un trou d'un pixel fait communiquer deux pièces. On
   // accroche donc chaque bout au pixel de mur le plus proche, puis on déborde
   // de quelques centimètres.
-  const RANC=Math.round(0.12*ptPerM*RSCALE), DEB=0.06*ptPerM;
+  const RANC=Math.round(enPx(0.12)), DEB=0.06*ptPerM;
   const ancre=(x,y)=>{
-    const px=Math.round((x-clip.x0)*RSCALE), py=Math.round((y-clip.y0)*RSCALE);
+    const px=Math.round((x-clip.x0)*RS), py=Math.round((y-clip.y0)*RS);
     let bx=x, by=y, bd=1e9;
     for(let dy=-RANC;dy<=RANC;dy++){
       const v=py+dy;
@@ -2120,7 +2328,7 @@ async function analyser(extr, finesse, echelle, progress){
       for(let dx=-RANC;dx<=RANC;dx++){
         const u=px+dx, d=dx*dx+dy*dy;
         if(u<0||u>=W||d>=bd||!murpix[v*W+u]) continue;
-        bd=d; bx=u/RSCALE+clip.x0; by=v/RSCALE+clip.y0;
+        bd=d; bx=u/RS+clip.x0; by=v/RS+clip.y0;
       }
     }
     return [bx,by];
@@ -2129,12 +2337,12 @@ async function analyser(extr, finesse, echelle, progress){
     const [x1,y1]=ancre(s[0],s[1]), [x2,y2]=ancre(s[2],s[3]);
     const L=Math.hypot(x2-x1,y2-y1)||1, ux=(x2-x1)/L*DEB, uy=(y2-y1)/L*DEB;
     const a=x1-ux, b=y1-uy, c=x2+ux, e=y2+uy;
-    trait(cv[0][1],3,a,b,c,e); trait(cv[2][1],3,a,b,c,e);
+    trait(cv[0][1],LWM,a,b,c,e); trait(cv[2][1],LWM,a,b,c,e);
   }
   const mask=lire(cv[0]), barr=lire(cv[2]);
 
   await say('Emprise du bâtiment…');
-  const ch=closing(mask,W,H,30);
+  const ch=closing(mask,W,H,Math.round(enPx(0.53)));
   const freeh=new Uint8Array(N);
   for(let i=0;i<N;i++) freeh[i]=ch[i]?0:1;
   const lh=labelCC(freeh,W,H);
@@ -2158,29 +2366,31 @@ async function analyser(extr, finesse, echelle, progress){
     for(const it of d.items){
       if(!it) continue;
       const [x1,y1,x2,y2]=it;
-      if(Math.hypot(x2-x1,y2-y1)>8) continue;
+      if(Math.hypot(x2-x1,y2-y1)>0.28*ptPerM) continue;
       const mx=(x1+x2)/2, my=(y1+y2)/2;
       if(clip.contient(mx,my))
-        hatch.push([Math.floor((mx-clip.x0)*RSCALE), Math.floor((my-clip.y0)*RSCALE)]);
+        hatch.push([Math.floor((mx-clip.x0)*RS), Math.floor((my-clip.y0)*RS)]);
     }
   }
   const filtreTrame=hatch.length>800;
 
   await say('Détection des pièces…');
-  const r=1+Math.floor(finesse);
+  // La finesse est un rayon de fermeture : il se compte lui aussi en metres,
+  // sinon la meme valeur ferme deux fois plus large a 1/50 qu'a 1/100.
+  const r=Math.max(1, Math.round((1+Math.floor(finesse))*pxPerM/PXM_REF));
   const closed=closing(mask,W,H,r);
   const free=new Uint8Array(N);
   for(let i=0;i<N;i++) free[i]=(!closed[i]&&hull[i])?1:0;
   const cc=labelCC(free,W,H);
   const lab=cc.lab;
-  const pxPerM2=(ptPerM*RSCALE)**2;
+  const pxPerM2=pxPerM**2;
   const comps=[];
   for(let i=1;i<=cc.n;i++) if(cc.areas[i]/pxPerM2>=1.5) comps.push(i);
 
   const texte={};
   for(const wd of extr.words){
     if(!clip.contient(wd.x,wd.y)) continue;
-    const px=Math.floor((wd.x-clip.x0)*RSCALE), py=Math.floor((wd.y-clip.y0)*RSCALE);
+    const px=Math.floor((wd.x-clip.x0)*RS), py=Math.floor((wd.y-clip.y0)*RS);
     if(px<0||py<0||px>=W||py>=H) continue;
     const c=lab[py*W+px];
     if(c) (texte[c]=texte[c]||[]).push([wd.y0,wd.x0,wd.s]);
@@ -2201,7 +2411,7 @@ async function analyser(extr, finesse, echelle, progress){
   const piece=new Uint8Array(cc.n+2);
   for(const c of comps) piece[c]=1;
   const cellule=(x,y,rmax)=>{
-    const px=Math.round((x-clip.x0)*RSCALE), py=Math.round((y-clip.y0)*RSCALE);
+    const px=Math.round((x-clip.x0)*RS), py=Math.round((y-clip.y0)*RS);
     if(px<0||py<0||px>=W||py>=H) return 0;
     const ici=lab[py*W+px];
     if(ici && piece[ici]) return ici;
@@ -2217,7 +2427,7 @@ async function analyser(extr, finesse, echelle, progress){
   };
   const etiq=etiquettes(extr.words);
   const parCell={};
-  const RCELL=Math.round(0.8*ptPerM*RSCALE);
+  const RCELL=Math.round(enPx(0.8));
   for(const e of etiq){
     let c=clip.contient(e.x,e.y) ? cellule(e.x, e.y, RCELL) : 0;
     if(!c && e.xn!=null && clip.contient(e.xn,e.yn)) c=cellule(e.xn, e.yn, RCELL);
@@ -2262,8 +2472,8 @@ async function analyser(extr, finesse, echelle, progress){
   const volees=detecterVolees(drawings, clip, ptPerM);
   let nEsc=0;
   for(const [x0,y0,x1,y1] of volees){
-    const px0=Math.max(0,Math.floor((x0-clip.x0)*RSCALE)), px1=Math.min(W-1,Math.floor((x1-clip.x0)*RSCALE));
-    const py0=Math.max(0,Math.floor((y0-clip.y0)*RSCALE)), py1=Math.min(H-1,Math.floor((y1-clip.y0)*RSCALE));
+    const px0=Math.max(0,Math.floor((x0-clip.x0)*RS)), px1=Math.min(W-1,Math.floor((x1-clip.x0)*RS));
+    const py0=Math.max(0,Math.floor((y0-clip.y0)*RS)), py1=Math.min(H-1,Math.floor((y1-clip.y0)*RS));
     if(px1<=px0||py1<=py0) continue;
     const votes={};
     for(let y=py0;y<=py1;y++) for(let x=px0;x<=px1;x++){
@@ -2294,7 +2504,7 @@ async function analyser(extr, finesse, echelle, progress){
     for(let i=1;i<=cc.n;i++) if((cc.areas[i]||0)/pxPerM2>=1.5) estPiece[i]=1;
     const repris=new Uint8Array(N);
     for(let i=0;i<N;i++){ const L=lab[i]; repris[i]=(!L || !estPiece[L])?1:0; }
-    const dmax=Math.round(0.45*ptPerM*RSCALE), demi=Math.round(RSCALE*0.75);
+    const dmax=Math.round(enPx(0.45)), demi=Math.max(1, Math.round(enPx(0.035)));
     const dest=croissance(lab, idsRet, barriere, hull, repris, W, H, dmax, demi);
     for(const id of idsRet){ cc.areas[id]=0; cc.bb[id]=null; }
     for(let i=0;i<N;i++){
@@ -2330,14 +2540,24 @@ async function analyser(extr, finesse, echelle, progress){
 
   await say('Cloisons entre pièces…');
   const ids=Object.keys(rooms).map(Number).sort((a,b)=>a-b);
-  const parPaire=adjacences(lab, ids, wallpix, W, H, 14);
-  const px2m=1/(ptPerM*RSCALE), GAP=10;
+  // Ces trois seuils se lisaient en pixels : la demi-epaisseur de mur qu'on
+  // fouille entre deux pieces, le trou tolere le long d'une cloison, et le
+  // nombre de pixels en dessous duquel une bande n'est que du bruit.
+  const parPaire=adjacences(lab, ids, wallpix, W, H, Math.max(3, Math.round(enPx(0.25))));
+  const px2m=1/pxPerM, GAP=Math.max(2, Math.round(enPx(0.18)));
+  const MINPX=Math.max(4, Math.round(8*(pxPerM/PXM_REF)**2));
+  // `murs` porte les traits d'origine — les segments a largeur de mur et l'axe
+  // de chaque aplat poche. C'est eux qui donnent a une cloison sa direction
+  // vraie, obliques comprises.
+  const idxM=indexMurs(murs, Math.max(4, ptPerM)), tolPt=AXE_TOL_M*ptPerM;
   const pairs=[];
   for(const e of parPaire.values()){
-    if(e.px.length<8) continue;
+    if(e.px.length<MINPX) continue;
     let segs=[];
     for(const comp of ccPixels(e.px,W))
-      if(comp.length>=8) segs=segs.concat(runsDe(comp,W,GAP,px2m,clip));
+      if(comp.length>=MINPX)
+        segs=segs.concat(runsParAxes(comp,W,GAP,px2m,clip,idxM,tolPt,MINPX));
+    segs=fusionnerRuns(segs, ptPerM);
     if(!segs.length) continue;
     const ra=rooms[String(e.a)], rb=rooms[String(e.b)];
     const key=[ra.cat,rb.cat].sort().join('|');
@@ -2393,7 +2613,7 @@ async function analyser(extr, finesse, echelle, progress){
   // vu quand une pièce sort de travers (tests/verite.mjs, et les rendus de mise
   // au point du banc).
   if(typeof window!=='undefined' && window.__MOTEUR_DBG)
-    window.__MOTEUR_DBG({W, H, RSCALE, clip:{x0:clip.x0, y0:clip.y0, w:clip.w, h:clip.h},
+    window.__MOTEUR_DBG({W, H, RSCALE:RS, pxPerM, clip:{x0:clip.x0, y0:clip.y0, w:clip.w, h:clip.h},
       ptPerM, murMin, mask, wallpix, murpix, barr, hull, closed, lab, rooms, linteaux,
       pxPerM2, aires:cc.areas, filtreTrame, tramePar, poches, etiq, nEtiq,
       nFins:fins.length, nTrame:trame.size, nCloisonsFines:cloisonsFines.size});

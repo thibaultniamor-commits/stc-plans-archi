@@ -185,14 +185,19 @@ def ecrire_pdf_poche(chemin, echelle=100):
     """Plan dont les murs sont poches — remplis, sans aucun contour au trait.
 
     C'est le cas qui sortait vide : le moteur ne lisait que les traits. L'echelle
-    est parametrable, pour eprouver la deduction d'echelle par les battants."""
+    est parametrable, pour eprouver la deduction d'echelle par les battants — et,
+    depuis le point 7 du carnet, pour que le meme batiment se retrouve au releve
+    quelle que soit l'echelle a laquelle il est dessine. Pour que ce soit bien le
+    meme dessin, la marge de feuille se prend en metres (0,7 m de plan) et le
+    lettrage en points (8 pt de papier, comme sur un vrai plan)."""
     import fitz
     pt_m = 72 / 25.4 * 1000 / echelle
-    W, H = LARG * pt_m + 40, HAUT * pt_m + 40
+    marge = 0.7 * pt_m
+    W, H = LARG * pt_m + 2 * marge, HAUT * pt_m + 2 * marge
     doc = fitz.open()
     page = doc.new_page(width=W, height=H)
-    X = lambda x: 20 + x * pt_m
-    Y = lambda y: 20 + (HAUT - y) * pt_m
+    X = lambda x: marge + x * pt_m
+    Y = lambda y: marge + (HAUT - y) * pt_m
     for x0, y0, x1, y1 in murs_poche():
         page.draw_rect(fitz.Rect(X(x0), Y(y1), X(x1), Y(y0)),
                        color=None, fill=(0, 0, 0))
@@ -209,9 +214,50 @@ def ecrire_pdf_poche(chemin, echelle=100):
         page.draw_line(fitz.Point(X(cx), Y(cy)),
                        fitz.Point(X(cx + r), Y(cy)), color=(.3, .3, .3), width=0.25)
     for x, y, s in libelles():
-        page.insert_text(fitz.Point(X(x) - len(s) * 2.2, Y(y)),
-                         s, fontsize=8 * 100 / echelle)
+        page.insert_text(fitz.Point(X(x) - len(s) * 2.2, Y(y)), s, fontsize=8)
     page.insert_text(fitz.Point(W - 90, H - 12), "1 : %d" % echelle, fontsize=8)
+    doc.save(chemin)
+    doc.close()
+
+
+# ------------------------------------------------- plan a cloison en biais
+# Le point 6 du carnet : une cloison qui n'est ni horizontale ni verticale
+# ressortait en marches d'escalier, projetee sur l'axe dominant. Le batiment est
+# ici reduit au minimum — un rectangle coupe en deux par un refend oblique — pour
+# que la cloison mesuree soit celle-la et aucune autre.
+BIAIS_L, BIAIS_H = 20.0, 12.0
+BIAIS_A = (7.0, 0.0)                   # le refend va de A en bas...
+BIAIS_B = (13.0, 12.0)                 # ... a B en haut : 26,6 degres de la verticale
+
+
+def murs_biais():
+    """Le pourtour et le refend oblique, en double trait (0,15 m)."""
+    out = []
+    for o in (-EP / 2, EP / 2):
+        out += [(0.0, o, BIAIS_L, o), (0.0, BIAIS_H + o, BIAIS_L, BIAIS_H + o),
+                (o, 0.0, o, BIAIS_H), (BIAIS_L + o, 0.0, BIAIS_L + o, BIAIS_H)]
+    (ax, ay), (bx, by) = BIAIS_A, BIAIS_B
+    L = math.hypot(bx - ax, by - ay)
+    nx, ny = (by - ay) / L, -(bx - ax) / L          # normale au refend
+    for o in (-EP / 2, EP / 2):
+        out.append((ax + nx * o, ay + ny * o, bx + nx * o, by + ny * o))
+    return out
+
+
+def ecrire_pdf_biais(chemin, echelle=100):
+    import fitz
+    pt_m = 72 / 25.4 * 1000 / echelle
+    W, H = BIAIS_L * pt_m + 40, BIAIS_H * pt_m + 40
+    doc = fitz.open()
+    page = doc.new_page(width=W, height=H)
+    X = lambda x: 20 + x * pt_m
+    Y = lambda y: 20 + (BIAIS_H - y) * pt_m
+    for x1, y1, x2, y2 in murs_biais():
+        page.draw_line(fitz.Point(X(x1), Y(y1)), fitz.Point(X(x2), Y(y2)),
+                       color=(0, 0, 0), width=1.2)
+    for x, y, s in [(3.5, 6.0, "201 BUREAU"), (16.0, 6.0, "202 SALLE DE REUNION")]:
+        page.insert_text(fitz.Point(X(x) - len(s) * 2.2, Y(y)), s,
+                         fontsize=8 * 100 / echelle)
     doc.save(chemin)
     doc.close()
 
@@ -235,6 +281,8 @@ if __name__ == "__main__":
     ecrire_pdf(os.path.join(d, "plan_scan.pdf"), scanne=True)
     ecrire_pdf_poche(os.path.join(d, "plan_poche.pdf"))
     ecrire_pdf_poche(os.path.join(d, "plan_poche_50.pdf"), echelle=50)
+    ecrire_pdf_poche(os.path.join(d, "plan_poche_200.pdf"), echelle=200)
+    ecrire_pdf_biais(os.path.join(d, "plan_biais.pdf"))
     ecrire_png(os.path.join(d, "plan.png"))
     for f in sorted(os.listdir(d)):
         print(f, os.path.getsize(os.path.join(d, f)))

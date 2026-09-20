@@ -40,7 +40,9 @@ const PLANS = [
   { fx: 'plan.dxf', echelle: 100 },
   { fx: 'plan_metres.dxf', echelle: 100 },
   { fx: 'plan_poche.pdf', echelle: 100 },
-  { fx: 'plan_poche_50.pdf', echelle: 50 }
+  { fx: 'plan_poche_50.pdf', echelle: 50 },
+  { fx: 'plan_poche_200.pdf', echelle: 200 },
+  { fx: 'plan_biais.pdf', echelle: 100 }
 ];
 
 const dors = ms => new Promise(r => setTimeout(r, ms));

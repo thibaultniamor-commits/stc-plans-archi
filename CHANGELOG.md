@@ -4,6 +4,100 @@ Les versions suivent [SemVer](https://semver.org/lang/fr/) : `MAJEUR.MINEUR.CORR
 Le numéro vit dans le fichier `VERSION` ; `build.py` l'inscrit dans `index.html`,
 où il s'affiche dans le pied de l'accueil et à côté du logo dans l'éditeur.
 
+## 2.7.0 — 2026-09-20
+
+Les points **7** et **6** du carnet : les seuils restés en pixels, et les
+cloisons obliques. Le premier faisait que le même plan ne donnait pas le même
+relevé selon l'échelle à laquelle il avait été dessiné ; le second rabattait sur
+l'horizontale ou la verticale tout ce qui n'y était pas.
+
+### Corrigé
+
+- **Le moteur ne répondait pas la même chose à 1/50, à 1/100 et à 1/200.** Son
+  image de travail était définie en points — deux pixels par point — donc le
+  même bâtiment y occupait deux fois plus de pixels dessiné à 1/50, deux fois
+  moins à 1/200 ; et une douzaine de seuils comptés en pixels changeaient de
+  sens avec lui. La définition se prend désormais en **pixels par mètre** : le
+  bâtiment fait le même nombre de pixels quelle que soit l'échelle du dessin, et
+  tous les seuils géométriques s'expriment en mètres — la fermeture d'emprise,
+  la demi-épaisseur de mur fouillée entre deux pièces, le trou toléré le long
+  d'une cloison, l'épaisseur des traits peints dans les masques, la longueur
+  minimale d'un trait fin repêché, le rayon de la finesse, la simplification des
+  contours, les cordes d'un battant. La même planche à murs pochés, dessinée à
+  1/50, 1/100 et 1/200, rend maintenant **le même relevé exactement** — 18
+  locaux, 27 cloisons, 18 portes, 523,8 m² — là où la version à 1/50 sortait
+  19 locaux et 33 cloisons, dont le cartouche pris pour une pièce.
+- **La marge de cadrage aussi était en points** — 40 pt, c'est-à-dire 1,4 m à
+  1/100 mais 0,7 m à 1/50. Elle vaut maintenant 1,4 m à toutes les échelles, de
+  quoi loger la fermeture d'emprise : sans cet espace, le vide entre le bâtiment
+  et le bord de l'image cesse de communiquer avec le dehors et **ressort en
+  pièces fantômes**. Elle n'est plus rognée à la feuille non plus — un plan
+  cadré au ras du bâti en fabriquait, et le fond de plan se rend en blanc
+  au-delà.
+- **Une cloison en biais sortait rabattue sur un axe.** Les pixels de mur
+  partagés par deux pièces étaient reprojetés sur l'axe — horizontal ou vertical
+  — le plus étendu de la bande : tout ce qui n'était ni l'un ni l'autre s'en
+  trouvait redressé de travers, quand il ne se fragmentait pas en marches
+  d'escalier. Le plan sait pourtant où va ce mur, puisqu'il l'a dessiné comme un
+  segment. On retrouve donc, sous la bande de pixels, le **trait vecteur** qui
+  l'a produite, et c'est sa direction qu'on suit. Sur le nouveau plan d'essai,
+  un refend à 26,6° de la verticale ressortait en deux traits verticaux de
+  11,8 m ; il sort maintenant en **un seul trait de 13,3 m dans sa pente**
+  (13,42 m au plan). Une bande qui suit plusieurs traits — un mur en L entre
+  deux pièces, un retour d'angle — est décomposée trait par trait. Sans trait
+  dessous, rien ne change : on retombe sur l'axe dominant d'avant. Un trait à
+  moins de 2,5° d'un axe est redressé sur cet axe, sans quoi le bruit d'export
+  sortirait des cloisons à un demi-degré, que l'auto-connexion de l'éditeur
+  laisse intactes parce qu'elle les croit obliques.
+- **Un mur dessiné en double trait était compté deux fois dans le métré.** Ses
+  deux faces donnent deux bandes de pixels séparées, donc deux cloisons jumelles
+  pour la même paire de pièces. Deux tracés parallèles, distants de moins d'une
+  épaisseur de mur et qui se recouvrent, n'en font plus qu'un, posé sur le fil
+  du mur. Ce tri n'était pas tenable tant que les tracés étaient rabattus sur un
+  axe : les deux faces d'un mur oblique en sortaient toutes deux verticales,
+  impossibles à reconnaître pour ce qu'elles étaient.
+
+### Modifié
+
+- **La définition de l'image s'adapte à l'échelle**, en visant celle à laquelle
+  le moteur est réglé (56,7 px/m, soit deux pixels par point à 1/100) : deux
+  pixels par point à 1/100, un seul à 1/50, quatre à 1/200. Un plafond mémoire
+  la ramène en deçà sur une très grande planche à petite échelle — le moteur
+  tient une douzaine de masques de la taille de l'image — et l'analyse le
+  signale alors dans sa note, plutôt que de rendre un relevé grossier en
+  silence.
+- **Deux plans d'essai de plus** : `plan_poche_200.pdf`, la même planche à
+  1/200, et `plan_biais.pdf`, un rectangle coupé par un refend oblique. La
+  planche à murs pochés est désormais le même dessin aux trois échelles — sa
+  marge se prend en mètres de plan et son lettrage en points de papier, comme
+  sur un vrai plan — sans quoi le banc mesurait la planche et non le moteur.
+- Le banc fonctionnel passe de **89 à 96 vérifications** : l'invariance
+  d'échelle à 1/50 et à 1/200 (mêmes locaux, mêmes cloisons, mêmes surfaces
+  qu'à 1/100), et la cloison oblique (deux locaux, un seul tracé, sa pente et sa
+  longueur vraie). L'étalon de stabilité est re-béni : il porte les huit plans
+  d'essai, et `plan_poche_50.pdf` y rejoint le relevé de `plan_poche.pdf`.
+
+### Mesuré
+
+**Le métré linéaire baisse d'un tiers sur les plans à murs en double trait** :
+sur le niveau 02 du projet réel, les mêmes 92 cloisons passent de 156 tracés et
+**337 m** à 112 tracés et **228 m**. Les 109 m de différence sont les murs qui
+étaient comptés deux fois, une fois par face. C'est le chiffre à regarder de
+près : il change le métré par cible et les CSV d'export. Aucune vérité terrain
+ne porte de longueurs de cloison, donc le nouveau total n'est vérifié que par
+construction et sur les plans d'essai — où le refend oblique tombe de 26,4 m à
+13,3 m pour 13,42 m au plan.
+
+Sur les trois niveaux du projet réel, la détection des locaux, elle, ne bouge
+pas — c'est ce qu'on attendait, le bâti y est orthogonal et les planches sont à
+1/100 :
+
+| Niveau | locaux au plan | retrouvés | fusions | manques | écart médian | noms lus | numéros justes | score |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 01 | 23 | 23 | 0 | 0 | 1,7 % | 23 | 21 | 93 |
+| 02 | 37 | 37 | 0 | 0 | 2,5 % | 37 | 33 | 96 |
+| 03 | 37 | 37 | 0 | 0 | 3,3 % | 36 | 34 | 95 |
+
 ## 2.6.0 — 2026-09-20
 
 Les points **8** et **9** du carnet : la classification par mots-clés, et le

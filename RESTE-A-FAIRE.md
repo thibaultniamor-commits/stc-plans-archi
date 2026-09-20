@@ -1,15 +1,12 @@
 # Ce qu'il reste à faire
 
-État au 2026-09-20, après la v2.6.0 (classification par mots entiers, harnais de
-mesure). Les mesures de pièces sont celles de la v2.4.0 — la géométrie n'a pas
-bougé depuis — mais **les catégories, elles, ont changé** : à refaire tourner sur
-les trois niveaux pour voir ce que la nouvelle classification y déplace.
+État au 2026-09-20, après la v2.7.0 (seuils en mètres, cloisons obliques).
 Cette liste est un carnet de reprise : chaque entrée dit **ce qu'on observe**,
 **ce qu'on en sait déjà**, et **où ça se joue dans le code**. Les numéros de ligne
-renvoient à `src/outil_stc.src.html` au moment de la v2.4.0 : la v2.5.0 les a
-décalés d'une quarantaine de lignes à partir de `roomInfo`, la v2.6.0 d'une
-quarantaine de plus dès `classifier`. Cherchez le nom de la fonction, pas la
-ligne.
+renvoient à `src/outil_stc.src.html` au moment de la v2.4.0, et trois versions
+les ont décalés depuis — d'une quarantaine de lignes à partir de `roomInfo`
+(v2.5.0), d'autant dès `classifier` (v2.6.0), de deux cents dans le moteur
+(v2.7.0). **Cherchez le nom de la fonction, pas la ligne.**
 
 ## Où on en est
 
@@ -22,12 +19,15 @@ Mesuré sur trois niveaux d'un projet réel, contre les étiquettes du plan
 | 02 | 37 | 37 | 0 | 0 | 2,5 % | 37 | 33 |
 | 03 | 37 | 37 | 0 | 0 | 3,3 % | 36 | 34 |
 
-Ce sont les chiffres à retrouver avant de toucher au moteur, et à comparer après.
-Une planche 36 × 24 po s'analyse en ~8 à 16 s.
+Ces chiffres sont ceux de la v2.4.0 et la v2.7.0 les rend inchangés, ce qui est
+la mesure attendue : le bâti y est orthogonal et les trois planches sont à 1/100
+— c'est-à-dire exactement le cas où les deux corrections de cette version ne
+changent rien. Ce sont les chiffres à retrouver avant de toucher au moteur, et à
+comparer après. Une planche 36 × 24 po s'analyse en ~8 à 20 s.
 
 ```
 node tests/verite.mjs index.html <plan.pdf> <verite.json> [finesse] [sortie.json]
-python tests/fixtures.py && node tests/banc.mjs     # 89 vérifications fonctionnelles
+python tests/fixtures.py && node tests/banc.mjs     # 96 vérifications fonctionnelles
 node tests/stabilite.mjs                            # dérive contre tests/baseline.json
 ```
 
@@ -138,37 +138,92 @@ retraits disent est en revanche exploitable — l'état enregistré porte la lis
 des zones écartées (`suppr`), c'est-à-dire un corpus de faux positifs désignés
 par l'utilisateur, prêt à mesurer le tri automatique qui les remplacerait.
 
-## 6. Les cloisons obliques sont cassées
+## 6. Les cloisons obliques — *fait en v2.7.0, ce qu'il en reste*
 
-**Observé** : un mur en biais ressort en marches d'escalier.
+**Fait** : une cloison ne se devine plus depuis le raster seul. Sous chaque bande
+de pixels d'adjacence, `axeSousBande` retrouve le **trait vecteur** qui l'a
+dessinée — parmi les murs d'origine, indexés par `indexMurs` — et `runsDe`
+projette les pixels sur *sa* direction au lieu de l'axe H ou V dominant. Une
+bande qui suit plusieurs traits (un mur en L entre deux pièces) est décomposée
+trait par trait par `runsParAxes`. Sans trait dessous, on retombe sur l'ancien
+comportement ; à moins de 2,5° d'un axe, le trait est redressé sur cet axe, sinon
+le bruit d'export sortirait des cloisons à un demi-degré que l'auto-connexion de
+l'éditeur laisse intactes parce qu'elle les croit obliques.
 
-**Ce qu'on en sait** : `runsDe` (:1608) projette les pixels d'adjacence sur l'axe
-H ou V dominant et reconstruit un segment droit. Tout ce qui n'est ni horizontal
-ni vertical se fragmente.
+Du même coup, un **mur en double trait n'est plus compté deux fois** : ses deux
+faces donnaient deux bandes séparées, donc deux cloisons jumelles pour la même
+paire de pièces. `fusionnerRuns` les réunit. Ce tri n'était pas tenable avant :
+rabattues sur un axe, les deux faces d'un mur oblique sortaient toutes deux
+verticales, impossibles à reconnaître pour ce qu'elles étaient.
 
-**Piste** : ré-associer les segments vecteurs d'origine aux pixels d'adjacence,
-au lieu de reconstruire depuis le raster. C'est aussi ce qui donnerait des
-contours de pièce droits plutôt que la frontière molle laissée par la croissance
-là où deux pièces se rencontrent dans du mobilier repris.
+Mesuré sur `tests/fx/plan_biais.pdf` (un refend à 26,6° de la verticale,
+13,42 m) : deux traits verticaux de 11,8 m avant, **un seul trait de 13,3 m dans
+sa pente** après. Et sur le niveau 02 du projet réel, les mêmes 92 cloisons
+passent de 156 tracés et **337 m** à 112 tracés et **228 m** : 109 m de mur qui
+étaient comptés deux fois dans le métré.
 
-## 7. Les seuils qui restent en pixels
+**Ce qui reste ouvert** :
 
-**Observé** : rien de visible à 1:100, mais tout se décale à 1:50 et à 1:200.
+- **Le contour des pièces, lui, reste mou.** C'était l'autre moitié de ce point :
+  là où deux pièces se rencontrent dans du mobilier repris, la frontière laissée
+  par `croissance` serpente, et `polyDe` la simplifie sans la redresser. Les
+  traits d'origine sont maintenant indexés et à portée de main (`indexMurs`) : de
+  quoi accrocher les arêtes d'un polygone au mur qui les longe, comme on vient de
+  le faire pour les cloisons. C'est le même geste, sur un autre objet.
+- **Le corpus réel est orthogonal.** Les trois niveaux d'essai n'ont pas un seul
+  mur en biais : la correction n'y est vérifiée que par un plan fabriqué. Un vrai
+  plan à pans coupés est le prochain essai qui apprendrait quelque chose — et il
+  se trouverait sans doute dans le même fichier que celui que réclame le point 9.
+- **Un mur courbe reste hors d'atteinte.** `runsDe` rend des segments droits ;
+  une rotonde en sortira en cordes. Rien ne le traite, et rien ne le signale.
+- **Rien ne mesure les longueurs de cloison.** Le métré du niveau 02 vient de
+  perdre un tiers de son linéaire, et c'est un progrès — mais aucune vérité
+  terrain ne porte de longueurs, donc on le sait par construction, pas par
+  mesure. Le format de `verite.mjs` accepte déjà des `pairs` ; il leur manque un
+  `len_m` relevé à la main sur quelques cloisons, de quoi noter le métré comme
+  on note les surfaces.
 
-**Ce qu'on en sait** : le code raisonne en mètres (`linteauxVirtuels`,
-`tramesRegulieres`, `finsDoublees`, `croissance`, `pochesDeMur`). Restent en
-pixels : `RSCALE=2` (:1051), le rayon d'emprise `closing(mask,W,H,30)` (:2052),
-l'adjacence `K=14` (:2240), le `GAP=10` de `runsDe` (:2241), et les `L>=6` /
-`L>=12` du tracé des masques. Entre 1:50 et 1:200 cela fait un facteur 4.
+## 7. Les seuils en pixels — *fait en v2.7.0, ce qu'il en reste*
 
-**Piste** : tout exprimer via `ptPerM`, et rendre `RSCALE` adaptatif (viser
-≥ 15 px/m, plafonné par la mémoire : une planche 36 × 24 po fait déjà 6,5 M px).
-L'échelle n'étant plus à saisir (v2.4.0), le moteur la connaît désormais avant
-d'ouvrir le premier masque.
+**Fait** : l'image de travail du moteur était définie en points — `RSCALE = 2`
+pixels par point — donc le même bâtiment y occupait deux fois plus de pixels
+dessiné à 1/50 qu'à 1/100, et une douzaine de seuils comptés en pixels changeaient
+de sens avec lui. La définition se prend désormais en **pixels par mètre**
+(`resolution`, `PXM_REF`), et tous les seuils géométriques s'expriment en mètres
+via `enPx` : fermeture d'emprise, demi-épaisseur de mur fouillée entre deux
+pièces, trou toléré le long d'une cloison, épaisseur des traits peints,
+longueur minimale d'un trait fin repêché, rayon de la finesse, simplification des
+contours, cordes d'un battant. La **marge de cadrage** y est passée aussi — 40 pt
+valait 1,4 m à 1/100 mais 0,7 m à 1/50 — et elle n'est plus rognée à la feuille :
+sans l'espace qu'elle réserve, le vide entre le bâtiment et le bord de l'image
+cesse de communiquer avec le dehors et ressort en pièces fantômes.
 
-**Sans objet ici** : les seuils de la reconnaissance de forme (`GLY_H_MIN`,
-`GLY_H_MAX`, :2484) sont en points *à dessein* — un texte imprimé fait 2 à 4 mm
-sur le papier quelle que soit l'échelle du plan.
+Mesuré : la même planche à murs pochés, à 1/50, 1/100 et 1/200, rend maintenant
+**le même relevé exactement** — 18 locaux, 27 cloisons, 18 portes, 523,8 m² — là
+où la version à 1/50 sortait 19 locaux et 33 cloisons, dont le cartouche pris
+pour une pièce.
+
+**Ce qui reste ouvert** :
+
+- **Le plafond mémoire rogne la définition sur les grandes planches.** Le moteur
+  tient une douzaine de masques de la taille de l'image ; au-delà de 12 M px,
+  `resolution` réduit la définition, et une planche 36 × 24 po à 1/200 retombe
+  vers 23 px/m au lieu de 56,7. L'analyse le signale dans sa note en dessous de
+  15 px/m, mais personne n'a mesuré ce qu'un relevé perd en descendant. Les trois
+  passes qui coûtent (emprise, `labelCC`, adjacence) sont aussi ce qui fixe ce
+  plafond : l'emprise pourrait se calculer en demi-résolution (point 10), et le
+  plafond monter d'autant.
+- **`lignesUtiles` (:1088) reste en points** — ses seuils de 6 et 9 pt cherchent
+  des pointillés aplatis, et un tiret de CAO se définit le plus souvent en unités
+  de papier. C'est défendable, mais ce n'est pas mesuré ; et le point 10 propose
+  de toute façon de fondre cette règle dans `tramesRegulieres`, qui, elle,
+  raisonne en mètres.
+- **Sans objet ici**, et à dessein : les seuils de la reconnaissance de forme
+  (`GLY_H_MIN`, `GLY_H_MAX`) sont en points parce qu'un texte imprimé fait 2 à
+  4 mm sur le papier quelle que soit l'échelle du plan. Les plans d'essai le
+  disent maintenant aussi : `ecrire_pdf_poche` lettre à 8 pt à toutes les
+  échelles, et prend sa marge en mètres — sans quoi le banc mesurait la planche
+  et non le moteur.
 
 ## 8. La classification par mots-clés — *fait en v2.6.0, ce qu'il en reste*
 
@@ -255,7 +310,9 @@ moins sûrs d'affilée. Le dictionnaire a reçu les manques les plus courants
   `transform`, `fondSVG` et `fondDXF` prennent déjà clip et échelle.
 - La **finesse** n'a presque plus d'effet : le même plan donne les mêmes locaux à
   2, 4 ou 6. Soit on la retire de l'interface, soit on lui redonne un rôle
-  explicite (par exemple le seuil `AIRE_ANON`).
+  explicite (par exemple le seuil `AIRE_ANON`). La v2.7.0 a converti son rayon en
+  mètres, donc elle veut au moins dire la même chose à toutes les échelles — mais
+  elle ne dit toujours pas grand-chose.
 - Le temps d'analyse tient surtout à trois passes sur 6,5 M px : la fermeture
   d'emprise (rayon 30), le `labelCC`, et l'adjacence. L'emprise pourrait se
   calculer en demi-résolution.
@@ -307,6 +364,12 @@ moins sûrs d'affilée. Le dictionnaire a reçu les manques les plus courants
   repêchage sert à retrouver des cloisons fines sur un plan au trait ; sur un
   plan poché, les murs sont les aplats, et l'abaisser fait des cloisons avec le
   mobilier et les battants.
+- **Un mur dessiné en double trait donne deux bandes de pixels, pas une.** Ses
+  deux faces ne se touchent pas — 0,15 m d'écart, soit huit pixels — donc la
+  recherche de composantes connexes les sépare, et la même cloison sortait deux
+  fois dans le métré. Ce n'est visible qu'une fois les tracés rendus à leur
+  direction vraie : tant qu'ils étaient rabattus sur un axe, deux faces d'un mur
+  oblique sortaient toutes deux verticales, à des positions sans rapport.
 - **L'axe principal d'un polygone se calcule sur les arêtes pondérées par leur
   longueur**, pas sur ses sommets : un coin répété (les exports ferment souvent
   sur le point de départ) ou une courbe finement découpée fait basculer l'axe, et
