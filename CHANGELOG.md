@@ -4,6 +4,91 @@ Les versions suivent [SemVer](https://semver.org/lang/fr/) : `MAJEUR.MINEUR.CORR
 Le numéro vit dans le fichier `VERSION` ; `build.py` l'inscrit dans `index.html`,
 où il s'affiche dans le pied de l'accueil et à côté du logo dans l'éditeur.
 
+## 2.6.0 — 2026-09-20
+
+Les points **8** et **9** du carnet : la classification par mots-clés, et le
+harnais de mesure. La première décidait la cible STC en sous-chaînes et au
+premier trouvé, ce qui la faisait mentir sans le dire ; le second mesurait les
+pièces mais ni les cloisons, ni les portes, et ne gardait aucune trace d'un
+relevé à l'autre.
+
+### Corrigé
+
+- **La classification lisait des sous-chaînes, pas des mots.** `« bureau »` est
+  contenu dans `« bureau partagé »`, et la première catégorie de l'ordre des
+  règles l'emportait : **un plateau partagé ressortait « privé »**, avec la
+  cible d'un bureau fermé. Un nom de local se découpe désormais en mots, et
+  chaque mot-clé est noté par sa précision — le nombre de mots qu'il fait
+  coïncider. C'est le plus précis qui gagne, quelle que soit sa catégorie ; à
+  égalité seulement, l'ordre des règles tranche. Le pluriel reste reconnu
+  (`BUREAUX`, `SANITAIRES`), parce que les plans écrivent au pluriel ce que le
+  dictionnaire porte au singulier.
+- **Des locaux courants manquaient au dictionnaire**, et tombaient donc dans
+  `privé` — 45 là où ils en valent 50 à 55. Ajoutés : `technique`,
+  `local technique`, `serveur`, `gaine` (technique) ; `sanitaire`, `wc`,
+  `douche`, `vestiaire` (confidentiel) ; `archives`, `sas`, `palier`,
+  `dégagement`, `ménage`, `entretien` (circulation) ; `cuisinette`,
+  `réfectoire`, `salle de pause` (collaboratif) ; `salle de classe`, `classe`,
+  `salle de cours`, `auditorium`, `amphithéâtre` (conférence). Sur les plans
+  d'essai, `LOCAL TECHNIQUE`, `SANITAIRES` et `ARCHIVES` changent de catégorie —
+  et de cible. **Relisez cette liste : elle engage le référentiel.**
+
+### Ajouté
+
+- **Une confiance sur chaque catégorie, et le doute qui se voit.** Le moteur
+  garde le mot-clé qui a décidé du classement et la qualité de lecture du
+  libellé quand il a fallu le reconnaître à la forme, et les combine en un
+  pourcentage. Le panneau d'une pièce dit sur quoi elle a été classée ; quand
+  aucun mot-clé ne répond, il dit en toutes lettres que « privé » est un défaut,
+  pas une lecture, et ce que cela coûte. Le panneau au repos ajoute une carte
+  **« Catégorie à vérifier »** qui liste les locaux les moins sûrs, du pire au
+  moins mauvais, et les ouvre d'un clic — la relecture se fait d'affilée, plus
+  en cherchant les pièces une à une sur le plan. Une catégorie tranchée à la
+  main sort de la liste et s'enregistre avec le relevé (`catvu`).
+- **Reprendre un nom reclasse le local.** L'aide disait déjà que le libellé
+  « commande la catégorie et la cible STC » ; il fallait encore choisir la
+  catégorie à la main. Corriger le nom la recalcule — sauf là où l'utilisateur
+  l'a déjà tranchée, son choix passant avant le mot-clé.
+- **Exporter › Étalon de mesure — vérité terrain.** Écrire un fichier de vérité
+  à la main est ce qui coûte le plus cher dans la mesure du moteur. L'outil
+  sérialise maintenant le relevé **après corrections** dans le format qu'attend
+  `tests/verite.mjs` : numéros, noms, catégories, surfaces, et pour chaque local
+  un point garanti *à l'intérieur* du polygone — le centre de gravité d'une
+  pièce en L tombe dehors, on prend donc le milieu de la plus large traversée à
+  mi-hauteur. Le fichier porte aussi les cloisons, les portes, et les zones
+  retirées du relevé : un corpus de faux positifs désignés à la main. La surface
+  de référence est celle lue sur l'étiquette quand il y en a une, et le champ
+  `area_source` dit laquelle des deux a servi.
+- **`tests/stabilite.mjs` : un étage stabilité, avec étalon versionné.** Le banc
+  fonctionnel vérifie des seuils — « au moins 12 locaux » —, donc un changement
+  qui fait passer 18 locaux à 13 le passe sans bruit. L'étalon
+  (`tests/baseline.json`) retient ce que le moteur *a répondu* sur les six plans
+  d'essai : comptes exacts de locaux, cloisons et portes, échelle déduite,
+  surface totale, histogramme des catégories et des cibles STC, et le classement
+  de chaque local avec le mot-clé qui l'a décidé. Les comptes et les catégories
+  sont comparés au strict, les surfaces à 3 % près. `--update-baseline` re-bénit
+  l'étalon, à relire et à commiter avec le changement qui l'explique. Les plans
+  d'essai étant fabriqués par `tests/fixtures.py`, l'étalon est reproductible
+  d'un poste à l'autre — aucun plan réel n'y entre.
+- **`tests/verite.mjs` mesure les cloisons et les portes, et rend un score.**
+  Les cloisons sont appariées par les **cellules**, pas par les numéros lus —
+  sinon un numéro faux ferait échouer une cloison juste, et on mesurerait deux
+  choses à la fois ; le banc dit les retrouvées, les manquées, celles en trop
+  entre deux locaux connus, celles qui touchent un local hors vérité, et
+  l'accord sur la cible STC. Les portes s'apparient au plus proche dans un rayon
+  d'un demi-battant. Un **score sur 100** résume le tout — locaux 30, cloisons
+  20, surfaces 15, noms 15, numéros 10, portes 10 — ramené au poids que la
+  vérité renseigne vraiment, pour qu'un fichier sans cloisons ne note pas mieux
+  qu'un fichier complet.
+
+### Modifié
+
+- Le banc fonctionnel passe de **77 à 89 vérifications** : les cinq règles de la
+  nouvelle classification, la confiance et sa carte de relecture, l'arbitrage à
+  la main, puis l'export de vérité terrain — le point repère dans la pièce pour
+  les 18 locaux du plan d'essai, les champs attendus par le banc, les cloisons,
+  la page et l'échelle.
+
 ## 2.5.0 — 2026-09-18
 
 Deux gestes qui manquaient à l'accueil et au plan : **voir la planche avant de

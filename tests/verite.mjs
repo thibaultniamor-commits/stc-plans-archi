@@ -6,10 +6,15 @@
 //
 //   { "plan":"Test.pdf", "page":1, "echelle":100,
 //     "rooms":[ {"num":"317","name":"Bureau partagé 06","area_m2":76,
-//                "cx":1042.4,"cy":344.4}, ... ] }
+//                "cx":1042.4,"cy":344.4}, ... ],
+//     "pairs":[ {"a":"317","b":"318","stc":45}, ... ],            // facultatif
+//     "portes":[ {"cx":1020.1,"cy":300.5}, ... ] }                // facultatif
 //
 // cx,cy = un point sûr du local, en points PDF (origine en haut à gauche, comme
 // pdf.js à l'échelle 1). En pratique : le centre de l'étiquette du local.
+//
+// Le plus court chemin pour écrire ce fichier : ouvrir le plan dans l'outil,
+// corriger le relevé à l'écran, puis Exporter › Étalon de mesure — et relire.
 //
 //   node tests/verite.mjs <index.html> <plan.pdf> <verite.json> [finesse] [sortie.json]
 //
@@ -109,8 +114,9 @@ async function analyser() {
     }
     const ms = Date.now() - t0;
     const D = await ev('D ? {rooms:D.rooms, polys:D.polys, pairs:D.pairs.map(p=>' +
-      '({ca:p.ca,cb:p.cb,len_m:p.len_m,stc:p.stc})), portes:(D.portes||[]).length,' +
-      ' note:D.vision_note, clip:D.clip} : null');
+      '({ca:p.ca,cb:p.cb,len_m:p.len_m,stc:p.stc})),' +
+      ' portes:(D.portes||[]).map(t=>({x:t.x,y:t.y,r_m:t.r_m})),' +
+      ' echelle:D.echelle, note:D.vision_note, clip:D.clip} : null');
     if (!D) throw new Error('analyse sans résultat');
     return { D, ms, erreurs };
   } finally {
@@ -152,6 +158,85 @@ function ressemble(lu, attendu) {
   if (!b) return null;
   if (!a) return 0;
   return Math.max(0, 1 - lev(a, b) / Math.max(a.length, b.length));
+}
+
+// --- justesse des cloisons ---
+// On n'apparie pas sur les numéros **lus** — ils peuvent être faux, et on
+// mesurerait deux choses à la fois. On passe par les cellules : chaque local de
+// la vérité connaît la cellule qui le porte, donc une cloison détectée entre deux
+// cellules appariées se relit dans les numéros de la vérité.
+const cle2 = (a, b) => [String(a), String(b)].sort().join('|');
+
+function mesurerPaires(D, lignes) {
+  if (!Array.isArray(V.pairs)) return null;
+  const numDe = new Map();                 // cellule détectée -> numéro de la vérité
+  for (const L of lignes) if (L.etat === 'ok') numDe.set(String(L.id), String(L.v.num));
+  const attendu = new Map();
+  for (const q of V.pairs) attendu.set(cle2(q.a, q.b), q);
+  const vues = new Map();
+  let horsVerite = 0;
+  for (const p of D.pairs) {
+    const a = numDe.get(String(p.ca)), b = numDe.get(String(p.cb));
+    if (a == null || b == null) { horsVerite++; continue; }   // touche un local hors vérité
+    const k = cle2(a, b);
+    const v = vues.get(k);
+    if (v) { v.len_m += p.len_m; v.stc = Math.max(v.stc, p.stc); }
+    else vues.set(k, { len_m: p.len_m, stc: p.stc });
+  }
+  const trouvees = [], manquees = [], enTrop = [];
+  for (const [k, q] of attendu) {
+    const d = vues.get(k);
+    if (!d) { manquees.push(q); continue; }
+    trouvees.push({ q, d, stcOk: q.stc == null || q.stc === d.stc });
+  }
+  for (const [k, d] of vues) if (!attendu.has(k)) enTrop.push({ k, d });
+  const stcOk = trouvees.filter(t => t.stcOk).length;
+  const notes = trouvees.filter(t => t.q.stc != null).length;
+  return { nVerite: V.pairs.length, trouvees: trouvees.length, manquees, enTrop,
+           horsVerite, stcOk, notes };
+}
+
+// --- justesse des portes ---
+// Une porte de la vérité est un point ; la détectée est le centre de son arc de
+// battement. On apparie au plus proche, dans un rayon d'un demi-battant.
+function mesurerPortes(D, ptPerM) {
+  if (!Array.isArray(V.portes)) return null;
+  const libres = (D.portes || []).map((t, i) => ({ t, i, pris: false }));
+  const RMAX = 0.6 * ptPerM;
+  let ok = 0; const manquees = [];
+  for (const v of V.portes) {
+    let best = null, bd = RMAX;
+    for (const c of libres) {
+      if (c.pris) continue;
+      const d = Math.hypot(c.t.x - v.cx, c.t.y - v.cy);
+      if (d < bd) { bd = d; best = c; }
+    }
+    if (best) { best.pris = true; ok++; } else manquees.push(v);
+  }
+  return { nVerite: V.portes.length, ok, manquees: manquees.length,
+           nDet: libres.length, enTrop: libres.filter(c => !c.pris).length };
+}
+
+// --- score résumé ---
+// Un seul nombre pour dire si un changement a fait avancer ou reculer le moteur.
+// Chaque poste ne compte que si la vérité le renseigne ; le total est ramené au
+// poids réellement pesable, sinon un fichier sans cloisons noterait mieux.
+function scorer(M, MP, MD) {
+  const postes = [];
+  const add = (nom, poids, part) => {
+    if (part == null || isNaN(part)) return;
+    postes.push({ nom, poids, part: Math.max(0, Math.min(1, part)) });
+  };
+  add('locaux', 30, M.nVerite ? M.ok / M.nVerite : null);
+  add('surfaces', 15, M.nErr ? 1 - M.err10 / M.nErr : null);
+  add('numéros', 10, M.nVerite ? M.numsBons / M.nVerite : null);
+  add('noms', 15, M.nNoms ? M.nomsBons / M.nNoms : null);
+  if (MP) add('cloisons', 20, MP.nVerite
+    ? (MP.trouvees / MP.nVerite) * (MP.notes ? MP.stcOk / MP.trouvees || 0 : 1) : null);
+  if (MD) add('portes', 10, MD.nVerite ? MD.ok / MD.nVerite : null);
+  const poids = postes.reduce((a, p) => a + p.poids, 0);
+  const gagne = postes.reduce((a, p) => a + p.poids * p.part, 0);
+  return { note: poids ? Math.round(100 * gagne / poids) : NaN, postes };
 }
 
 function mesurer(D) {
@@ -202,6 +287,10 @@ const pc = v => (isNaN(v) ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1) +
 
 const { D, ms, erreurs } = await analyser();
 const M = mesurer(D);
+const ptPerM = 2834.6457 / (D.echelle || V.echelle || 100);
+const MP = mesurerPaires(D, M.lignes);
+const MD = mesurerPortes(D, ptPerM);
+const S = scorer(M, MP, MD);
 console.log('\nPlan : ' + basename(PLAN) + ' page ' + (V.page || 1) +
   '   finesse ' + FINESSE + '   ' + (ms / 1000).toFixed(1) + ' s');
 console.log(D.note + '\n');
@@ -225,7 +314,27 @@ console.log('  numéros justes            ' + M.numsBons + ' / ' + M.nVerite);
 console.log('  noms reconnus             ' + M.nomsBons + ' / ' + M.nNoms +
   '   (ressemblance moyenne ' + (M.simMoy * 100).toFixed(0) + ' %, ' +
   M.nomsVides + ' non lus)');
-console.log('  cloisons                  ' + D.pairs.length + '   portes ' + D.portes);
+console.log('  cloisons                  ' + D.pairs.length + '   portes ' +
+  (D.portes || []).length);
+if (MP) {
+  console.log('\n  cloisons de la vérité      ' + MP.nVerite);
+  console.log('  retrouvées               ' + MP.trouvees + '   manquées ' +
+    MP.manquees.length + '   en trop entre locaux connus ' + MP.enTrop.length);
+  console.log('  cible STC identique       ' + MP.stcOk + ' / ' + MP.trouvees +
+    (MP.notes ? '' : '   (la vérité ne donne pas de cible)'));
+  console.log('  touchant un local hors vérité  ' + MP.horsVerite +
+    '   (circulations, gaines…)');
+  for (const q of MP.manquees.slice(0, 8))
+    console.log('    manquée : ' + q.a + ' ↔ ' + q.b);
+}
+if (MD) {
+  console.log('\n  portes de la vérité        ' + MD.nVerite);
+  console.log('  retrouvées               ' + MD.ok + '   manquées ' + MD.manquees +
+    '   détectées en trop ' + MD.enTrop);
+}
+console.log('\n  score                     ' + S.note + ' / 100');
+console.log('    ' + S.postes.map(p => p.nom + ' ' + Math.round(100 * p.part) + ' %')
+  .join('   '));
 if (erreurs.length) console.log('  erreurs JS : ' + erreurs.slice(0, 3).join(' | '));
 
 // les libellés les moins bien lus : c'est là qu'on voit ce que la
@@ -246,9 +355,17 @@ if (SORTIE) {
     resume: {
       nVerite: M.nVerite, ok: M.ok, fusions: M.fusions, manques: M.manques,
       nDet: M.nDet, enTrop: M.enTrop.length, errMed: M.errMed,
-      errAbsMed: M.errAbsMed, err10: M.err10, pairs: D.pairs.length, portes: D.portes,
-      numsBons: M.numsBons, nomsBons: M.nomsBons, nNoms: M.nNoms, simMoy: M.simMoy
+      errAbsMed: M.errAbsMed, err10: M.err10, pairs: D.pairs.length,
+      portes: (D.portes || []).length,
+      numsBons: M.numsBons, nomsBons: M.nomsBons, nNoms: M.nNoms, simMoy: M.simMoy,
+      score: S.note,
+      paires: MP && { nVerite: MP.nVerite, trouvees: MP.trouvees,
+                      manquees: MP.manquees.length, enTrop: MP.enTrop.length,
+                      horsVerite: MP.horsVerite, stcOk: MP.stcOk, notes: MP.notes },
+      portes_v: MD && { nVerite: MD.nVerite, ok: MD.ok, manquees: MD.manquees,
+                        nDet: MD.nDet, enTrop: MD.enTrop }
     },
+    postes: S.postes,
     lignes: M.lignes.map(L => ({ num: L.v.num, etat: L.etat, decl: L.v.area_m2,
                                  det: L.det?.area_det ?? null, err: L.err ?? null,
                                  nom: L.det?.name ?? null, sim: L.sim ?? null }))

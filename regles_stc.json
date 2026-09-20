@@ -4,16 +4,20 @@
   "ordre": ["confidentiel", "conference", "technique", "circulation", "prive", "collaboratif"],
   "categories": {
     "collaboratif": ["bureau partage", "open space", "aire ouverte", "bipe", "aire tranquille",
-                     "aire familles", "salle polyvalente", "cuisine", "cafeteria", "atelier",
+                     "aire familles", "salle polyvalente", "cuisine", "cuisinette", "cafeteria",
+                     "refectoire", "salle de pause", "atelier",
                      "gymnase", "salle d'attente", "accueil", "papeterie"],
     "prive":        ["bureau individuel", "bureau ferme", "bureau"],
-    "conference":   ["salle de reunion", "reunion", "conference", "visioconference", "formation"],
+    "conference":   ["salle de reunion", "reunion", "conference", "visioconference", "formation",
+                     "salle de classe", "classe", "salle de cours", "auditorium", "amphitheatre"],
     "circulation":  ["circulation", "corridor", "couloir", "escalier", "ascenseur", "vestibule",
-                     "hall", "monte-charge", "rangement", "depot", "distribution"],
+                     "hall", "monte-charge", "rangement", "depot", "distribution",
+                     "archives", "sas", "palier", "degagement", "menage", "entretien"],
     "technique":    ["mecanique", "salle electrique", "electrique", "telecom", "informatique",
-                     "ventilation", "chaufferie"],
+                     "ventilation", "chaufferie", "local technique", "technique", "serveur", "gaine"],
     "confidentiel": ["intervention", "counseling", "consultation", "entrevue", "allaitement",
-                     "toilette", "infirmerie", "ressources humaines", "direction"]
+                     "toilette", "sanitaire", "wc", "douche", "vestiaire",
+                     "infirmerie", "ressources humaines", "direction"]
   },
   "descriptions": {
     "collaboratif": "Collaboratif / multi-usage : plateaux partages, salles polyvalentes, cuisine, gymnase",

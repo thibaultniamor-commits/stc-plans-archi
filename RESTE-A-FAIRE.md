@@ -1,11 +1,15 @@
 # Ce qu'il reste à faire
 
-État au 2026-09-18, après la v2.5.0 (aperçu au survol, retrait d'une zone) ;
-les mesures sont celles de la v2.4.0, le moteur n'ayant pas bougé depuis.
+État au 2026-09-20, après la v2.6.0 (classification par mots entiers, harnais de
+mesure). Les mesures de pièces sont celles de la v2.4.0 — la géométrie n'a pas
+bougé depuis — mais **les catégories, elles, ont changé** : à refaire tourner sur
+les trois niveaux pour voir ce que la nouvelle classification y déplace.
 Cette liste est un carnet de reprise : chaque entrée dit **ce qu'on observe**,
 **ce qu'on en sait déjà**, et **où ça se joue dans le code**. Les numéros de ligne
-renvoient à `src/outil_stc.src.html` au moment de la v2.4.0 — la v2.5.0 les a
-décalés d'une quarantaine de lignes à partir de `roomInfo`.
+renvoient à `src/outil_stc.src.html` au moment de la v2.4.0 : la v2.5.0 les a
+décalés d'une quarantaine de lignes à partir de `roomInfo`, la v2.6.0 d'une
+quarantaine de plus dès `classifier`. Cherchez le nom de la fonction, pas la
+ligne.
 
 ## Où on en est
 
@@ -23,8 +27,13 @@ Une planche 36 × 24 po s'analyse en ~8 à 16 s.
 
 ```
 node tests/verite.mjs index.html <plan.pdf> <verite.json> [finesse] [sortie.json]
-python tests/fixtures.py && node tests/banc.mjs     # 77 vérifications fonctionnelles
+python tests/fixtures.py && node tests/banc.mjs     # 89 vérifications fonctionnelles
+node tests/stabilite.mjs                            # dérive contre tests/baseline.json
 ```
+
+Le fichier de vérité s'écrit maintenant depuis l'outil — **Exporter › Étalon de
+mesure** — après correction du relevé à l'écran. Il porte aussi les cloisons, les
+portes et les zones écartées, que `verite.mjs` sait désormais mesurer.
 
 ---
 
@@ -161,43 +170,72 @@ d'ouvrir le premier masque.
 `GLY_H_MAX`, :2484) sont en points *à dessein* — un texte imprimé fait 2 à 4 mm
 sur le papier quelle que soit l'échelle du plan.
 
-## 8. La classification par mots-clés
+## 8. La classification par mots-clés — *fait en v2.6.0, ce qu'il en reste*
 
-**Observé** : un local mal orthographié ou absent du dictionnaire tombe dans
-`prive` par défaut — et se voit attribuer une cible de 45 au lieu de 50-55.
+**Fait** : le nom se découpe en mots entiers (pluriel compris), chaque mot-clé
+est noté par sa précision et c'est le plus précis qui gagne — « bureau partagé »
+ne ressort plus « privé ». Le moteur garde le mot-clé qui a décidé (`kw`) et
+une `conf` qui combine sa netteté avec la qualité de lecture du libellé ; le
+panneau d'une pièce le dit, et une carte « Catégorie à vérifier » reprend les
+moins sûrs d'affilée. Le dictionnaire a reçu les manques les plus courants
+(technique, sanitaire, archives, vestiaire, salle de classe…).
 
-**Ce qu'on en sait** : `classifier` (:1072) fait un `includes` de mots-clés dans
-l'ordre des catégories. Depuis la v2.4.0 il repasse, à défaut, sur une
-comparaison **floue** (`flou_`, :1065) qui rabat les familles de formes que la
-reconnaissance confond — c'est ce qui sauve « SaIIe » lu pour « Salle ». Cela ne
-règle pas l'orthographe : ça règle la lecture.
+**Ce qui reste ouvert** :
 
-**Piste** : mots entiers plutôt que sous-chaînes, score plutôt que premier
-trouvé, et un champ `confiance` affiché dans l'UI pour que le doute se voie — le
-moteur en a maintenant deux à combiner, la qualité de lecture du libellé (`L.d`)
-et la netteté du mot-clé trouvé.
+- **Le dictionnaire est à relire par un acousticien.** Les entrées ajoutées en
+  v2.6.0 engagent le référentiel : elles sont listées dans le CHANGELOG, une par
+  une, pour qu'on puisse les contester. `vestiaire` en confidentiel et `gaine`
+  en technique sont les deux plus discutables.
+- **Un local reste classé sur son seul libellé.** Sa surface, ses voisins et ses
+  portes ne comptent pas : un « local » de 4 m² sans fenêtre au bout d'un couloir
+  est un rangement, quoi qu'en dise son nom. C'est la même information que le
+  point 5 cherche pour trier les cellules anonymes.
+- **L'orthographe n'est toujours pas traitée.** La comparaison floue rabat les
+  familles de formes que la reconnaissance confond ; elle ne rattrape pas un mot
+  mal écrit sur le plan. Une distance d'édition bornée (une lettre sur cinq) sur
+  les mots-clés longs le ferait, au prix d'un faux positif possible.
+- **`catvu` ne dit pas *pourquoi*.** Une catégorie tranchée à la main sort de la
+  liste de relecture, mais rien ne retient le mot qui aurait dû la trouver. Ces
+  arbitrages sont un corpus : de quoi proposer l'entrée manquante du
+  dictionnaire, comme les zones retirées en sont un pour le point 5.
 
-## 9. Le harnais de mesure est à moitié fait
+## 9. Le harnais de mesure — *fait en v2.6.0, ce qu'il en reste*
 
-**Ce qui existe** : `tests/verite.mjs` (justesse des pièces : appariement par le
-point de l'étiquette, fusions, manques, écart de surface ; et, depuis la v2.4.0,
-justesse des libellés : numéros exacts, noms reconnus à travers les familles de
-formes, ressemblance moyenne, liste des noms à revoir) et `tests/banc.mjs`
-(77 vérifications fonctionnelles sur plans synthétiques).
+**Ce qui existe maintenant** :
 
-**Ce qui manque** :
-- l'appariement des **paires de locaux** et des **portes**, et un score résumé ;
-- un étage **stabilité** : sorties de référence commitées pour des plans sans
-  vérité, re-bénissables (`--update-baseline`), qui attrapent les effets de bord ;
-- un bouton « Exporter la vérité terrain » dans l'outil, qui sérialiserait l'état
-  **après** corrections manuelles — c'est le moyen le moins coûteux d'étendre le
-  corpus, et il est devenu plus intéressant encore : l'outil lit maintenant les
-  numéros et les noms, il n'y a plus qu'à les corriger, pas à les saisir ;
-- un corpus d'un **autre émetteur** : les trois plans de référence sortent du
-  même exporteur. C'est vrai pour la géométrie, et plus encore pour la
-  reconnaissance de forme, réglée sur une seule police (une linéale proche
-  d'Arial). Un plan lettré en Romans ou en Century Gothic est le prochain test
-  qui apprendra quelque chose.
+- `tests/verite.mjs` — justesse des pièces (appariement par le point de
+  l'étiquette, fusions, manques, écart de surface) et des libellés (numéros
+  exacts, noms reconnus à travers les familles de formes) ; **et, depuis la
+  v2.6.0, des cloisons et des portes**. Les cloisons s'apparient par les
+  cellules, pas par les numéros lus. Un **score sur 100** résume l'ensemble,
+  ramené au poids que la vérité renseigne vraiment.
+- `tests/stabilite.mjs` + `tests/baseline.json` — l'étage stabilité : la sortie
+  du moteur sur les six plans d'essai, versionnée, comparée au strict sur les
+  comptes et les catégories, à 3 % sur les surfaces, re-bénissable par
+  `--update-baseline`.
+- `tests/banc.mjs` — 89 vérifications fonctionnelles sur plans synthétiques.
+- **Exporter › Étalon de mesure** dans l'outil : le relevé corrigé sérialisé au
+  format du banc, point repère garanti à l'intérieur de chaque pièce.
+
+**Ce qui manque encore** :
+
+- **Un corpus d'un autre émetteur.** Les trois plans de référence sortent du
+  même exporteur, et la reconnaissance de forme est réglée sur **une seule
+  police** (une linéale proche d'Arial). Tant que ce test n'est pas fait, les
+  96 noms sur 97 sont un chiffre local, pas une performance. Un plan lettré en
+  Romans ou en Century Gothic est le prochain essai qui apprendra quelque chose
+  — c'est le seul point du carnet qui ne demande pas du code, mais un fichier.
+- **L'étalon ne couvre que des plans fabriqués.** Par construction : les plans
+  réels ne sont pas versionnés. `tests/nonreg.mjs` comble le trou en comparant
+  deux builds sur les vrais plans, mais il faut y penser et les avoir sous la
+  main ; rien n'oblige à le lancer avant publication.
+- **Le score ne pondère pas les locaux.** Manquer une gaine de 2 m² et manquer
+  un gymnase coûtent pareil. Une pondération par la surface, ou par le linéaire
+  de cloison en jeu, dirait mieux ce qu'un changement fait au livrable.
+- **Rien ne mesure les cellules en trop** (point 5) autrement qu'en les
+  comptant. Les zones écartées à la main voyagent maintenant dans le fichier de
+  vérité (`ecartees`) : de quoi noter un tri automatique en rappel et en
+  précision, ce que le banc ne fait pas encore.
 
 ## 10. Petites dettes
 

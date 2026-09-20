@@ -444,6 +444,76 @@ async function main() {
   verif("Image : pas de relance d'analyse proposee",
     await evalue("document.getElementById('srvctl').style.display === 'none'"));
 
+  // 7b — classification : mots entiers, score, et le doute qui se voit
+  // « bureau » est contenu dans « bureau partagé » : en sous-chaînes, et au
+  // premier trouvé, un plateau partagé ressortait « privé ».
+  const cl = await evalue(`(()=>{ const c=MOTEUR.classer;
+    return {partage:c('Bureau partagé 06'), bureau:c('101 BUREAU'),
+            pluriel:c('Bureaux'), tech:c('LOCAL TECHNIQUE'),
+            inconnu:c('Zone de tri des colis'), flou:c('SaIIe de reunion')}; })()`);
+  verif('Classer : « bureau partagé » n’est plus « privé »',
+    cl.partage.cat === 'collaboratif' && cl.partage.kw === 'bureau partage',
+    JSON.stringify(cl.partage));
+  verif('Classer : « bureau » seul reste « privé »',
+    cl.bureau.cat === 'prive' && cl.pluriel.cat === 'prive',
+    JSON.stringify([cl.bureau.cat, cl.pluriel.cat]));
+  verif('Classer : le mot-clé le plus précis gagne sur l’ordre des règles',
+    cl.tech.cat === 'technique' && cl.tech.net === 1, JSON.stringify(cl.tech));
+  verif('Classer : sans mot-clé, « privé » par défaut mais net = 0',
+    cl.inconnu.cat === 'prive' && cl.inconnu.net === 0 && cl.inconnu.kw === null,
+    JSON.stringify(cl.inconnu));
+  verif('Classer : les familles de formes rattrapent « SaIIe »',
+    cl.flou.cat === 'conference', JSON.stringify(cl.flou));
+
+  // le doute se voit dans l'interface, et se reprend d'affilée
+  await evalue("(async()=>chargerPlan(await __fx('plan.pdf')))()");
+  await dors(1200);
+  await evalue('lancerAnalyse(0, 4, 100)');
+  await dors(3000);
+  const dt = await evalue(`(()=>{
+    const c=Object.keys(D.rooms)[0];
+    selRoom=null; panel();
+    const avant=categoriesARevoir().length;
+    renommerPiece(c,'name','Zone de tri des colis');
+    selRoom=null; panel();
+    const apres=categoriesARevoir().length;
+    const carte=!!document.querySelector('.conf-row[data-c]');
+    state.catvu[c]=true;
+    selRoom=null; panel();
+    return {avant, apres, carte, arbitre:categoriesARevoir().length,
+            conf:D.rooms[c].conf, kw:D.rooms[c].kw, cat:state.cats[c]}; })()`);
+  verif('Confiance : un local sans mot-clé passe à 0 et entre dans la relecture',
+    dt.conf === 0 && dt.kw === null && dt.apres === dt.avant + 1, JSON.stringify(dt));
+  verif('Confiance : la carte « Catégorie à vérifier » s’affiche', dt.carte);
+  verif('Confiance : une catégorie tranchée à la main sort de la liste',
+    dt.arbitre === dt.apres - 1, JSON.stringify({apres: dt.apres, arbitre: dt.arbitre}));
+
+  // 7c — exporter la vérité terrain : l'étalon du banc, écrit par l'outil
+  const vt = await evalue(`(()=>{
+    const V=veriteTerrain();
+    const dans=(pt,poly)=>{ let d=false;
+      for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+        const [xi,yi]=poly[i],[xj,yj]=poly[j];
+        if((yi>pt[1])!==(yj>pt[1]) && pt[0]<(xj-xi)*(pt[1]-yi)/(yj-yi)+xi) d=!d; }
+      return d; };
+    let dedans=0;
+    for(const c of Object.keys(D.polys)){
+      const r=D.rooms[c]; if(!r) continue;
+      const v=V.rooms.find(q=>q.num===String(r.num) && q.name===r.name);
+      if(v && dans([v.cx,v.cy], D.polys[c])) dedans++;
+    }
+    return {n:V.rooms.length, dedans, pairs:V.pairs.length, portes:V.portes.length,
+            page:V.page, echelle:V.echelle, plan:V.plan,
+            cles:Object.keys(V.rooms[0]||{}).sort().join(',')}; })()`);
+  verif('Vérité terrain : un local par zone du relevé', vt.n >= 12, JSON.stringify({n: vt.n}));
+  verif('Vérité terrain : le point repère tombe dans la pièce',
+    vt.dedans === vt.n, JSON.stringify({dedans: vt.dedans, sur: vt.n}));
+  verif('Vérité terrain : les champs attendus par tests/verite.mjs',
+    vt.cles === 'area_m2,area_source,cat,cx,cy,name,num', vt.cles);
+  verif('Vérité terrain : cloisons, portes, page et échelle',
+    vt.pairs > 0 && vt.page === 1 && vt.echelle === 100 && vt.plan === 'plan.pdf',
+    JSON.stringify({p: vt.pairs, d: vt.portes, pg: vt.page, e: vt.echelle}));
+
   // 8 — aucune erreur console pendant tout le parcours
   verif('aucune erreur JS sur tout le parcours', erreurs.length === 0,
     erreurs.slice(0, 3).join(' | '));

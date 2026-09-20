@@ -1,0 +1,1047 @@
+{
+ "outil": "index.html",
+ "beni_le": "2026-09-20",
+ "tolerance_aire": 0.03,
+ "plans": {
+  "plan.pdf": {
+   "note": "18 pièces · 27 cloisons · 0 portes · 0 cages d'escalier · murs >= 0.2 pt · seuil murs abaissé à 0.2 pt (traits fins dans ce PDF)",
+   "echelle": 100,
+   "rooms": 18,
+   "pairs": 27,
+   "portes": 0,
+   "nommes": 18,
+   "aireMed": 27.2,
+   "aireTot": 490.3,
+   "cats": {
+    "circulation": 2,
+    "prive": 10,
+    "collaboratif": 2,
+    "confidentiel": 1,
+    "conference": 2,
+    "technique": 1
+   },
+   "locaux": [
+    {
+     "num": "101",
+     "nom": "101 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.3
+    },
+    {
+     "num": "102",
+     "nom": "102 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.3
+    },
+    {
+     "num": "103",
+     "nom": "103 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 27.3
+    },
+    {
+     "num": "104",
+     "nom": "104 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.3
+    },
+    {
+     "num": "105",
+     "nom": "105 LOCAL TECHNIQUE",
+     "cat": "technique",
+     "kw": "local technique",
+     "conf": 100,
+     "aire": 27.3
+    },
+    {
+     "num": "106",
+     "nom": "106 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.3
+    },
+    {
+     "num": "107",
+     "nom": "107 OPEN SPACE",
+     "cat": "collaboratif",
+     "kw": "open space",
+     "conf": 100,
+     "aire": 27.2
+    },
+    {
+     "num": "108",
+     "nom": "108 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "109",
+     "nom": "109 SANITAIRES",
+     "cat": "confidentiel",
+     "kw": "sanitaire",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "110",
+     "nom": "110 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "111",
+     "nom": "111 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 27.2
+    },
+    {
+     "num": "112",
+     "nom": "112 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "113",
+     "nom": "113 CIRCULATION",
+     "cat": "circulation",
+     "kw": "circulation",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "114",
+     "nom": "114 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "115",
+     "nom": "115 ARCHIVES",
+     "cat": "circulation",
+     "kw": "archives",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "116",
+     "nom": "116 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "117",
+     "nom": "117 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "118",
+     "nom": "118 CAFETERIA",
+     "cat": "collaboratif",
+     "kw": "cafeteria",
+     "conf": 80,
+     "aire": 27.3
+    }
+   ],
+   "stc": {
+    "35": 1,
+    "40": 3,
+    "45": 12,
+    "50": 7,
+    "53": 1,
+    "55": 3
+   }
+  },
+  "plan.svg": {
+   "note": "18 pièces · 27 cloisons · 18 portes · 0 cages d'escalier · murs >= 0.2 pt · seuil murs abaissé à 0.2 pt (traits fins dans ce PDF)",
+   "echelle": 100,
+   "rooms": 18,
+   "pairs": 27,
+   "portes": 18,
+   "nommes": 18,
+   "aireMed": 27.2,
+   "aireTot": 490.3,
+   "cats": {
+    "circulation": 2,
+    "prive": 10,
+    "collaboratif": 2,
+    "confidentiel": 1,
+    "conference": 2,
+    "technique": 1
+   },
+   "locaux": [
+    {
+     "num": "101",
+     "nom": "101 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.3
+    },
+    {
+     "num": "102",
+     "nom": "102 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.3
+    },
+    {
+     "num": "103",
+     "nom": "103 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 27.3
+    },
+    {
+     "num": "104",
+     "nom": "104 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.3
+    },
+    {
+     "num": "105",
+     "nom": "105 LOCAL TECHNIQUE",
+     "cat": "technique",
+     "kw": "local technique",
+     "conf": 100,
+     "aire": 27.3
+    },
+    {
+     "num": "106",
+     "nom": "106 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.3
+    },
+    {
+     "num": "107",
+     "nom": "107 OPEN SPACE",
+     "cat": "collaboratif",
+     "kw": "open space",
+     "conf": 100,
+     "aire": 27.2
+    },
+    {
+     "num": "108",
+     "nom": "108 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "109",
+     "nom": "109 SANITAIRES",
+     "cat": "confidentiel",
+     "kw": "sanitaire",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "110",
+     "nom": "110 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "111",
+     "nom": "111 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 27.2
+    },
+    {
+     "num": "112",
+     "nom": "112 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "113",
+     "nom": "113 CIRCULATION",
+     "cat": "circulation",
+     "kw": "circulation",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "114",
+     "nom": "114 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "115",
+     "nom": "115 ARCHIVES",
+     "cat": "circulation",
+     "kw": "archives",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "116",
+     "nom": "116 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "117",
+     "nom": "117 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 27.2
+    },
+    {
+     "num": "118",
+     "nom": "118 CAFETERIA",
+     "cat": "collaboratif",
+     "kw": "cafeteria",
+     "conf": 80,
+     "aire": 27.3
+    }
+   ],
+   "stc": {
+    "35": 1,
+    "40": 3,
+    "45": 12,
+    "50": 7,
+    "53": 1,
+    "55": 3
+   }
+  },
+  "plan.dxf": {
+   "note": "18 pièces · 27 cloisons · 18 portes · 0 cages d'escalier · murs >= 0.45 pt",
+   "echelle": 100,
+   "rooms": 18,
+   "pairs": 27,
+   "portes": 18,
+   "nommes": 18,
+   "aireMed": 28.6,
+   "aireTot": 514.8,
+   "cats": {
+    "circulation": 2,
+    "prive": 10,
+    "collaboratif": 2,
+    "confidentiel": 1,
+    "conference": 2,
+    "technique": 1
+   },
+   "locaux": [
+    {
+     "num": "101",
+     "nom": "101 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "102",
+     "nom": "102 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "103",
+     "nom": "103 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 28.6
+    },
+    {
+     "num": "104",
+     "nom": "104 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "105",
+     "nom": "105 LOCAL TECHNIQUE",
+     "cat": "technique",
+     "kw": "local technique",
+     "conf": 100,
+     "aire": 28.6
+    },
+    {
+     "num": "106",
+     "nom": "106 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "107",
+     "nom": "107 OPEN SPACE",
+     "cat": "collaboratif",
+     "kw": "open space",
+     "conf": 100,
+     "aire": 28.6
+    },
+    {
+     "num": "108",
+     "nom": "108 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "109",
+     "nom": "109 SANITAIRES",
+     "cat": "confidentiel",
+     "kw": "sanitaire",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "110",
+     "nom": "110 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "111",
+     "nom": "111 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 28.6
+    },
+    {
+     "num": "112",
+     "nom": "112 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "113",
+     "nom": "113 CIRCULATION",
+     "cat": "circulation",
+     "kw": "circulation",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "114",
+     "nom": "114 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "115",
+     "nom": "115 ARCHIVES",
+     "cat": "circulation",
+     "kw": "archives",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "116",
+     "nom": "116 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "117",
+     "nom": "117 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "118",
+     "nom": "118 CAFETERIA",
+     "cat": "collaboratif",
+     "kw": "cafeteria",
+     "conf": 80,
+     "aire": 28.6
+    }
+   ],
+   "stc": {
+    "35": 1,
+    "40": 3,
+    "45": 12,
+    "50": 7,
+    "53": 1,
+    "55": 3
+   }
+  },
+  "plan_metres.dxf": {
+   "note": "18 pièces · 27 cloisons · 18 portes · 0 cages d'escalier · murs >= 0.45 pt",
+   "echelle": 100,
+   "rooms": 18,
+   "pairs": 27,
+   "portes": 18,
+   "nommes": 18,
+   "aireMed": 28.6,
+   "aireTot": 514.8,
+   "cats": {
+    "circulation": 2,
+    "prive": 10,
+    "collaboratif": 2,
+    "confidentiel": 1,
+    "conference": 2,
+    "technique": 1
+   },
+   "locaux": [
+    {
+     "num": "101",
+     "nom": "101 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "102",
+     "nom": "102 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "103",
+     "nom": "103 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 28.6
+    },
+    {
+     "num": "104",
+     "nom": "104 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "105",
+     "nom": "105 LOCAL TECHNIQUE",
+     "cat": "technique",
+     "kw": "local technique",
+     "conf": 100,
+     "aire": 28.6
+    },
+    {
+     "num": "106",
+     "nom": "106 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "107",
+     "nom": "107 OPEN SPACE",
+     "cat": "collaboratif",
+     "kw": "open space",
+     "conf": 100,
+     "aire": 28.6
+    },
+    {
+     "num": "108",
+     "nom": "108 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "109",
+     "nom": "109 SANITAIRES",
+     "cat": "confidentiel",
+     "kw": "sanitaire",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "110",
+     "nom": "110 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "111",
+     "nom": "111 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 28.6
+    },
+    {
+     "num": "112",
+     "nom": "112 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "113",
+     "nom": "113 CIRCULATION",
+     "cat": "circulation",
+     "kw": "circulation",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "114",
+     "nom": "114 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "115",
+     "nom": "115 ARCHIVES",
+     "cat": "circulation",
+     "kw": "archives",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "116",
+     "nom": "116 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "117",
+     "nom": "117 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.6
+    },
+    {
+     "num": "118",
+     "nom": "118 CAFETERIA",
+     "cat": "collaboratif",
+     "kw": "cafeteria",
+     "conf": 80,
+     "aire": 28.6
+    }
+   ],
+   "stc": {
+    "35": 1,
+    "40": 3,
+    "45": 12,
+    "50": 7,
+    "53": 1,
+    "55": 3
+   }
+  },
+  "plan_poche.pdf": {
+   "note": "18 pièces · 27 cloisons · 18 portes · 0 cages d'escalier · murs >= 0.45 pt · 11 murs en aplat plein relevés",
+   "echelle": 100,
+   "rooms": 18,
+   "pairs": 27,
+   "portes": 18,
+   "nommes": 18,
+   "aireMed": 29.1,
+   "aireTot": 523.8,
+   "cats": {
+    "circulation": 2,
+    "prive": 10,
+    "collaboratif": 2,
+    "confidentiel": 1,
+    "conference": 2,
+    "technique": 1
+   },
+   "locaux": [
+    {
+     "num": "101",
+     "nom": "101 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "102",
+     "nom": "102 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "103",
+     "nom": "103 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 29.1
+    },
+    {
+     "num": "104",
+     "nom": "104 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "105",
+     "nom": "105 LOCAL TECHNIQUE",
+     "cat": "technique",
+     "kw": "local technique",
+     "conf": 100,
+     "aire": 29.1
+    },
+    {
+     "num": "106",
+     "nom": "106 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "107",
+     "nom": "107 OPEN SPACE",
+     "cat": "collaboratif",
+     "kw": "open space",
+     "conf": 100,
+     "aire": 29.1
+    },
+    {
+     "num": "108",
+     "nom": "108 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "109",
+     "nom": "109 SANITAIRES",
+     "cat": "confidentiel",
+     "kw": "sanitaire",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "110",
+     "nom": "110 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "111",
+     "nom": "111 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 29.1
+    },
+    {
+     "num": "112",
+     "nom": "112 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "113",
+     "nom": "113 CIRCULATION",
+     "cat": "circulation",
+     "kw": "circulation",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "114",
+     "nom": "114 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "115",
+     "nom": "115 ARCHIVES",
+     "cat": "circulation",
+     "kw": "archives",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "116",
+     "nom": "116 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "117",
+     "nom": "117 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 29.1
+    },
+    {
+     "num": "118",
+     "nom": "118 CAFETERIA",
+     "cat": "collaboratif",
+     "kw": "cafeteria",
+     "conf": 80,
+     "aire": 29.1
+    }
+   ],
+   "stc": {
+    "35": 1,
+    "40": 3,
+    "45": 12,
+    "50": 7,
+    "53": 1,
+    "55": 3
+   }
+  },
+  "plan_poche_50.pdf": {
+   "note": "19 pièces · 33 cloisons · 18 portes · 0 cages d'escalier · murs >= 0.45 pt · 11 murs en aplat plein relevés",
+   "echelle": 50,
+   "rooms": 19,
+   "pairs": 33,
+   "portes": 18,
+   "nommes": 19,
+   "aireMed": 28.7,
+   "aireTot": 525,
+   "cats": {
+    "circulation": 2,
+    "prive": 11,
+    "collaboratif": 2,
+    "confidentiel": 1,
+    "conference": 2,
+    "technique": 1
+   },
+   "locaux": [
+    {
+     "num": "1",
+     "nom": "1 : 50",
+     "cat": "prive",
+     "kw": null,
+     "conf": 0,
+     "aire": 8.4
+    },
+    {
+     "num": "101",
+     "nom": "101 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "102",
+     "nom": "102 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "103",
+     "nom": "103 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 28.7
+    },
+    {
+     "num": "104",
+     "nom": "104 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "105",
+     "nom": "105 LOCAL TECHNIQUE",
+     "cat": "technique",
+     "kw": "local technique",
+     "conf": 100,
+     "aire": 28.7
+    },
+    {
+     "num": "106",
+     "nom": "106 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "107",
+     "nom": "107 OPEN SPACE",
+     "cat": "collaboratif",
+     "kw": "open space",
+     "conf": 100,
+     "aire": 28.7
+    },
+    {
+     "num": "108",
+     "nom": "108 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "109",
+     "nom": "109 SANITAIRES",
+     "cat": "confidentiel",
+     "kw": "sanitaire",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "110",
+     "nom": "110 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "111",
+     "nom": "111 SALLE DE REUNION",
+     "cat": "conference",
+     "kw": "salle de reunion",
+     "conf": 100,
+     "aire": 28.7
+    },
+    {
+     "num": "112",
+     "nom": "112 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "113",
+     "nom": "113 CIRCULATION",
+     "cat": "circulation",
+     "kw": "circulation",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "114",
+     "nom": "114 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "115",
+     "nom": "115 ARCHIVES",
+     "cat": "circulation",
+     "kw": "archives",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "116",
+     "nom": "116 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "117",
+     "nom": "117 BUREAU",
+     "cat": "prive",
+     "kw": "bureau",
+     "conf": 80,
+     "aire": 28.7
+    },
+    {
+     "num": "118",
+     "nom": "118 CAFETERIA",
+     "cat": "collaboratif",
+     "kw": "cafeteria",
+     "conf": 80,
+     "aire": 28.7
+    }
+   ],
+   "stc": {
+    "35": 1,
+    "40": 3,
+    "45": 16,
+    "50": 8,
+    "53": 1,
+    "55": 4
+   }
+  }
+ }
+}

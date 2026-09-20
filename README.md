@@ -29,6 +29,14 @@ double-clic.
   comparée à un alphabet que le navigateur dessine lui-même : rien à installer,
   rien à envoyer. Sur les trois niveaux d'essai, 96 noms de locaux sur 97 sont
   lus, et chacun se reprend dans le panneau de la pièce.
+- **Classement par mots entiers, et le doute affiché** — le nom d'un local se
+  découpe en mots, et chaque mot-clé est noté par sa précision : c'est le plus
+  précis qui gagne, pas le premier de la liste. L'outil garde le mot-clé qui a
+  décidé et la qualité de lecture du libellé, et en fait une **confiance**. Quand
+  aucun mot-clé ne répond, il le dit au lieu de ranger le local dans « privé » en
+  silence — une carte « Catégorie à vérifier » liste les moins sûrs et les ouvre
+  d'un clic. La catégorie commande la cible STC : c'est la ligne où une erreur
+  coûte le plus cher.
 - **Échelle déduite du plan** — le rayon des battants de porte désigne, parmi les
   échelles usuelles, celle à laquelle les portes de ce plan ont une largeur de
   porte ; le cartouche (« 1 : 100 ») sert de recoupement, et la divergence est
@@ -129,6 +137,24 @@ python tests/fixtures.py   # écrit tests/fx/, non versionné
 node tests/banc.mjs
 ```
 
+`tests/stabilite.mjs` garde la trace de ce que le moteur **a répondu**. Le banc
+fonctionnel vérifie des seuils — « au moins 12 locaux » — donc un changement qui
+en fait passer 18 à 13 le traverse sans bruit. L'étalon `tests/baseline.json`,
+lui, est versionné : comptes exacts de locaux, cloisons et portes, échelle
+déduite, surface totale, histogramme des catégories et des cibles, et le
+classement de chaque local avec le mot-clé qui l'a décidé. Les comptes et les
+catégories sont comparés au strict, les surfaces à 3 % près. Les plans d'essai
+étant fabriqués, l'étalon est reproductible d'un poste à l'autre — aucun plan
+réel n'y entre.
+
+```
+node tests/stabilite.mjs                    # échec s'il dérive
+node tests/stabilite.mjs --update-baseline  # re-bénir un changement voulu
+```
+
+Un écart n'est pas forcément une régression : relisez le diff de l'étalon, puis
+commitez-le **avec** le changement qui l'explique.
+
 `tests/verite.mjs` mesure la **justesse** : le plan passe dans le vrai chemin de
 l'outil, et le relevé est confronté à une liste de locaux lue sur le plan —
 numéro, nom, surface déclarée et un point sûr du local, en points PDF. Le rapport
@@ -137,12 +163,24 @@ justesse des libellés : numéros exacts, noms reconnus, et la liste de ceux qui
 restent à revoir. Les noms se comparent à travers les familles de formes que la
 reconnaissance confond (l/i/1, o/0, g/9…), comme le fait la classification.
 
+Si la vérité porte les champs facultatifs `pairs` et `portes`, le banc mesure
+aussi les **cloisons** et les **portes**. Les cloisons sont appariées par les
+cellules, jamais par les numéros lus — sinon un numéro faux ferait échouer une
+cloison juste — et le rapport dit les retrouvées, les manquées, celles en trop
+entre deux locaux connus, et l'accord sur la cible STC. Un **score sur 100**
+résume l'ensemble (locaux 30, cloisons 20, surfaces 15, noms 15, numéros 10,
+portes 10), ramené au poids que la vérité renseigne vraiment.
+
 ```
 node tests/verite.mjs index.html <plan.pdf> <verite.json> [finesse] [sortie.json]
 ```
 
 Le fichier de vérité décrit un plan réel : il reste **hors dépôt**, à côté du
-plan. Son format tient dans l'en-tête de `tests/verite.mjs`.
+plan. Son format tient dans l'en-tête de `tests/verite.mjs`. Le plus court chemin
+pour l'écrire : ouvrir le plan dans l'outil, corriger le relevé à l'écran, puis
+**Exporter › Étalon de mesure — vérité terrain** — et le relire avant qu'il serve
+de référence. Il emporte aussi les zones retirées du relevé : un corpus de faux
+positifs désignés à la main.
 
 `tests/nonreg.mjs` compare deux builds sur les mêmes plans, page par page. À
 lancer sur de vrais plans avant publication ; ils restent sur le poste, rien
@@ -172,10 +210,11 @@ journal complet est dans [CHANGELOG.md](CHANGELOG.md).
   bombements (*bulge*) des polylignes sont rendus par leur corde.
 - En SVG comme en PDF, les **courbes** rompent la polyligne sans produire de
   segment : un mur dessiné en courbe n'est pas lu.
-- Les murs dessinés en **aplat plein** (poché sans contour au trait) ne sont pas
-  lus ; le diagnostic le signale quand la page en compte beaucoup.
-- Classement des locaux par **mots-clés français** ; un local non reconnu se
-  reclasse à la main.
+- Classement des locaux par **mots-clés français**, en mots entiers : un local
+  absent du dictionnaire tombe dans « privé » par défaut, mais avec une confiance
+  nulle, et l'outil le porte dans sa carte « Catégorie à vérifier ». La
+  reclassification reste à la main — ou par une entrée ajoutée à
+  `regles_stc.json`.
 - Les atriums et escaliers mécaniques ne sont pas détectés comme locaux ; les
   vitrages ne sont pas traités automatiquement.
 - Une ouverture de plus de 2 m entre deux espaces n'est pas refermée : les deux
