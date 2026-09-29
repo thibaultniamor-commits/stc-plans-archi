@@ -4,6 +4,44 @@ Les versions suivent [SemVer](https://semver.org/lang/fr/) : `MAJEUR.MINEUR.CORR
 Le numéro vit dans le fichier `VERSION` ; `build.py` l'inscrit dans `index.html`,
 où il s'affiche dans le pied de l'accueil et à côté du logo dans l'éditeur.
 
+## 2.8.0 — 2026-09-29
+
+Suite d'un audit du livrable : le contrôle des portes et les exports CSV. Le
+moteur n'est pas touché — le banc de stabilité rend l'étalon du 2026-09-20.
+
+### Corrigé
+
+- **Le contrôle composite condamnait toute porte.** Il prenait le mur exactement
+  à la cible et exigeait que le composite l'atteigne : une porte plus faible que
+  le mur le faisait toujours échouer, y compris celle qui suivait le conseil
+  affiché à côté, « STC porte ≥ cible − 10 ». Le contrôle traduit désormais ce
+  conseil : une cloison n'est en défaut que si son composite tombe sous celui
+  qu'elle aurait avec toutes ses portes à cible − 10. Le panneau, la liste des
+  cloisons, la carte de conformité et le conseil de porte disent la même chose.
+- **La surface de la porte était retirée deux fois du mur.** La longueur d'une
+  cloison vient des pixels de mur, où la baie manque déjà ; on lui ôtait encore
+  la porte. Le mur compte maintenant sa longueur tracée sur toute la hauteur,
+  plus l'imposte au-dessus de chaque porte. Le calculateur, ouvert depuis une
+  cloison, reprend la même surface.
+- **Les portes posées à la main n'entraient dans aucun composite.** Elles se
+  rattachent maintenant à la cloison la plus proche (0,6 m), comme les portes
+  détectées ; la carte de conformité ne se dit plus « aucune non-conformité »
+  sans les avoir vues, et elles comptent dans la colonne « Portes » du CSV.
+- **Les CSV s'ouvraient mal dans un Excel réglé en français.** Les décimales
+  sortaient avec un point (« 12.5 », lu comme une date ou du texte) et un nom
+  contenant un point-virgule décalait les colonnes. Virgule décimale, champs
+  cités quand il le faut, et un champ commençant par « = », « + » ou « @ » n'est
+  plus interprété comme une formule.
+- Quelques valeurs venues d'un état enregistré (lignes du calculateur, matrice,
+  libellés de la liste des cloisons) étaient insérées sans échappement.
+
+### Ajouté
+
+- Colonne **« Cat. à confirmer »** dans `cibles_STC_valide.csv` : `A`, `B` ou
+  `A+B` quand la catégorie d'un côté vient d'un défaut ou d'un mot-clé mal lu —
+  la liste « Catégorie à vérifier » de l'écran, reportée dans le fichier.
+- Banc : 100 vérifications (composite et CSV).
+
 ## 2.7.0 — 2026-09-20
 
 Les points **7** et **6** du carnet : les seuils restés en pixels, et les

@@ -563,6 +563,40 @@ async function main() {
     vt.pairs > 0 && vt.page === 1 && vt.echelle === 100 && vt.plan === 'plan.pdf',
     JSON.stringify({p: vt.pairs, d: vt.portes, pg: vt.page, e: vt.echelle}));
 
+  // 7d — composite : porte manuelle rattachée, imposte comptée en mur, plancher cible − 10
+  const cpx = await evalue(`(()=>{
+    const p=P.find(q=>!pairIgnoree(q) && q.segments.some(s=>s.len_m>=1.5));
+    const s=p.segments.find(s=>s.len_m>=1.5);
+    const L=Math.hypot(s.p2[0]-s.p1[0], s.p2[1]-s.p1[1]);
+    const ux=(s.p2[0]-s.p1[0])/L, uy=(s.p2[1]-s.p1[1])/L, w=0.9*PT_PER_M;
+    const avant=portesDeLaPaire(p).length;
+    const pm={x:s.cx, y:s.cy, lx:s.cx+ux*w, ly:s.cy+uy*w, stc:null};
+    state.portes_man.push(pm);
+    const apres=portesDeLaPaire(p).length;
+    const T=stcOf(p);
+    pm.stc=T-10; const auPlancher=compositePaire(p);
+    pm.stc=T-15; const dessous=compositePaire(p);
+    state.portes_man.pop();
+    return {avant, apres, T, okPlancher:auPlancher.bad, okDessous:dessous.bad,
+            ref:auPlancher.ref, comp:auPlancher.comp,
+            mur:murOpaque(3,[{w:0.9}],2.7,2.1)}; })()`);
+  verif('Composite : une porte posée à la main entre dans sa cloison',
+    cpx.apres === cpx.avant + 1, JSON.stringify({avant: cpx.avant, apres: cpx.apres}));
+  verif('Composite : une porte à cible − 10 est conforme, à cible − 15 non',
+    cpx.okPlancher === false && cpx.okDessous === true, JSON.stringify(cpx));
+  verif('Composite : l’imposte au-dessus de la porte compte comme mur',
+    Math.abs(cpx.mur - (3 * 2.7 + 0.9 * 0.6)) < 1e-9, String(cpx.mur));
+
+  // 7e — CSV lisible par un Excel français
+  const csv = await evalue(`(()=>({
+    dec:celluleCSV(12.5), ent:celluleCSV(45), pv:celluleCSV('Hall; RDC'),
+    gu:celluleCSV('Salle "A"'), fo:celluleCSV('=1+1'), vide:celluleCSV(null),
+    lignes:texteCSV([['a',1.5],['b;c',2]]) }))()`);
+  verif('CSV : virgule décimale, champs cités, formules neutralisées',
+    csv.dec === '12,5' && csv.ent === '45' && csv.pv === '"Hall; RDC"' &&
+    csv.gu === '"Salle ""A"""' && csv.fo === "'=1+1" && csv.vide === '' &&
+    csv.lignes === '﻿a;1,5\r\n"b;c";2', JSON.stringify(csv));
+
   // 8 — aucune erreur console pendant tout le parcours
   verif('aucune erreur JS sur tout le parcours', erreurs.length === 0,
     erreurs.slice(0, 3).join(' | '));

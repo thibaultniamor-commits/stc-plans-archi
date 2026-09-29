@@ -5139,7 +5139,7 @@ function panel(){
     const rm=man?Math.round(Math.hypot(man.lx-man.x,man.ly-man.y)/PT_PER_M*100)/100
              :(D.portes[selPorte.det]||{}).r_m;
     const pr=man?null:(D.portes[selPorte.det]||{}).pair;
-    const paire=pr?P.find(function(p){ return pairKey(p)===pr; }):null;
+    const paire=man?pairDePorteMan(man):(pr?P.find(function(p){ return pairKey(p)===pr; }):null);
     let corps='<div style="margin-top:12px"><div class="muted" style="margin-bottom:4px">'+
       'Affaiblissement de la porte</div><div style="display:flex;gap:4px" id="pstcgrp">'+
       STC_PORTES.map(function(x){ return '<button class="segbtn'+(cur===x?' on':'')+
@@ -5147,12 +5147,13 @@ function panel(){
     if(paire){
       const cp=compositePaire(paire);
       if(cp.comp!=null){
-        const bad=cp.comp<cp.target-0.5;
+        const bad=cp.bad;
         corps+='<div style="margin-top:12px;padding:12px;border-radius:5px;background:'+
           (bad?'rgba(192,57,43,.12)':'rgba(46,125,82,.14)')+';border:1px solid '+
           (bad?'rgba(192,57,43,.35)':'rgba(46,125,82,.4)')+'">'+
           '<div class="num" style="color:'+(bad?'var(--err)':'var(--ok)')+
-          ';font-weight:600">Composite '+fr(cp.comp,1)+' pour une cible '+cp.target+'</div>'+
+          ';font-weight:600">Composite '+fr(cp.comp,1)+' pour un plancher de '+fr(cp.ref,1)+
+          ' (cible '+cp.target+')</div>'+
           '<div class="muted" style="margin-top:6px">'+conseilPorte(paire, cp)+'</div>'+
           '<div style="display:flex;gap:8px;margin-top:8px"><button class="sec" style="height:28px"'+
           ' onclick="calcDepuisPaire()">Ouvrir dans le calculateur</button></div></div>';
@@ -5209,7 +5210,7 @@ function panel(){
         '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f0a500"'+
         ' stroke-width="1.8" stroke-linecap="round" class="ico"><use href="#i-door"/></svg>'+
         '<span style="color:var(--texte)">'+cp.portes+' porte'+(cp.portes>1?'s':'')+
-        ' sur cette cloison — viser STC porte ≥ '+(v-10)+'</span></div>';
+        ' sur cette cloison — viser STC porte ≥ '+(v-ECART_PORTE)+'</span></div>';
     }
     corps+='<div style="display:flex;gap:8px;margin-top:12px">'+
       '<div style="flex:1"><div class="muted" style="margin-bottom:4px">Cible forcée</div>'+
@@ -5217,14 +5218,14 @@ function panel(){
       selOptions(STCOPTS, state.overrides[k], '— matrice ('+matrixStc(p)+') —')+'</select></div>'+
       '<div style="width:104px"><div class="muted" style="margin-bottom:4px">Composite</div>'+
       '<div class="num" style="height:28px;border-radius:4px;background:var(--champ);'+
-      'border:1px solid '+(cp.comp!=null&&cp.comp<cp.target-0.5?'rgba(192,57,43,.6)':'rgba(255,255,255,.22)')+
-      ';color:'+(cp.comp!=null&&cp.comp<cp.target-0.5?'var(--err)':'var(--titre)')+
+      'border:1px solid '+(cp.bad?'rgba(192,57,43,.6)':'rgba(255,255,255,.22)')+
+      ';color:'+(cp.bad?'var(--err)':'var(--titre)')+
       ';display:flex;align-items:center;justify-content:center;font-weight:600">'+
       (cp.comp!=null?fr(cp.comp,1):(cp.unspec?'—':'n/a'))+'</div></div></div>';
     if(cp.portes && cp.unspec)
       corps+='<div class="muted" style="margin-top:8px;color:var(--warn)">'+
         cp.unspec+' porte'+(cp.unspec>1?'s':'')+' sans STC : le composite reste incalculable.</div>';
-    else if(cp.comp!=null && cp.comp<cp.target-0.5)
+    else if(cp.bad)
       corps+='<div class="muted" style="margin-top:8px">'+conseilPorte(p, cp)+'</div>';
     s.innerHTML=carte('Cloison '+ech(p.a)+' ↔ '+ech(p.b),
       ech(p.name_a)+' ↔ '+ech(p.name_b)+' · '+fr(len)+' m · h '+fr(H)+' m',
@@ -5443,25 +5444,26 @@ function conseilPorte(p, cp){
   const len=p.segments.reduce(function(a,s){ return a+s.len_m; },0);
   const portes=portesDeLaPaire(p);
   const target=cp.target;
-  let doorArea=0;
-  for(const d of portes) doorArea+=Math.max(0.1,d.w)*HD;
-  const mur=Math.max(0.01, len*H-doorArea);
+  const mur=murOpaque(len, portes, H, HD);
   const essai=function(stcPorte){
     const parts=[{a:mur, stc:target}];
     for(const d of portes) parts.push({a:Math.max(0.1,d.w)*HD, stc:stcPorte});
     return composite(parts);
   };
+  if(!cp.bad)
+    return 'Composite '+fr(cp.comp,1)+' : au moins celui de portes à STC '+(target-ECART_PORTE)+
+           ' (cible − '+ECART_PORTE+'). Le mur, lui, doit tenir '+target+'.';
   const pire=portes.reduce(function(m,d){ return (d.stc!=null && d.stc<m) ? d.stc : m; }, 99);
   for(const v of STC_PORTES){
     if(v<=pire) continue;
     const c=essai(v);
-    if(c>=target-0.5)
-      return 'Une porte STC '+v+' amène le composite à <b style="color:var(--ok)">'+
-             fr(c,1)+'</b> : la cible '+target+' est atteinte.';
+    if(c>=cp.ref)
+      return 'Des portes STC '+v+' amènent le composite à <b style="color:var(--ok)">'+
+             fr(c,1)+'</b>, le niveau de portes à cible − '+ECART_PORTE+'.';
   }
   const c=essai(STC_PORTES[STC_PORTES.length-1]);
-  return 'Même une porte STC '+STC_PORTES[STC_PORTES.length-1]+' plafonne le composite à <b>'+
-         fr(c,1)+'</b> : atteindre '+target+' demande aussi de reprendre le mur ou sa surface vitrée.';
+  return 'Même des portes STC '+STC_PORTES[STC_PORTES.length-1]+' plafonnent le composite à <b>'+
+         fr(c,1)+'</b> : il faut aussi reprendre le mur ou sa surface vitrée.';
 }
 function calcDepuisPaire(){
   const p=(selSeg&&selSeg.pair)?selSeg.pair:selPair;
@@ -5618,32 +5620,62 @@ function composite(parts){
   if(A<=0) return null;
   return Math.round(-10*Math.log10(T/A)*10)/10;
 }
+// Une porte posée à la main n'a pas de cloison : on la rattache à la plus proche,
+// comme le moteur le fait pour une porte détectée — sinon elle n'entrait dans
+// aucun composite, et le contrôle se disait conforme sans l'avoir vue.
+function pairDePorteMan(pm){
+  const sondes=[[pm.x,pm.y],[pm.lx,pm.ly],[(pm.x+pm.lx)/2,(pm.y+pm.ly)/2]];
+  let best=null, bd=0.6*PT_PER_M;
+  for(const p of P){
+    if(pairIgnoree(p)) continue;
+    for(const s of p.segments){
+      const [x1,y1]=s.p1,[x2,y2]=s.p2, vx=x2-x1, vy=y2-y1, L2=vx*vx+vy*vy;
+      for(const [px,py] of sondes){
+        const t=L2===0?0:Math.max(0,Math.min(1,((px-x1)*vx+(py-y1)*vy)/L2));
+        const d=Math.hypot(px-(x1+t*vx), py-(y1+t*vy));
+        if(d<bd){ bd=d; best=p; }
+      }
+    }
+  }
+  return best;
+}
 function portesDeLaPaire(p){
   const k=pairKey(p), out=[];
   (D.portes||[]).forEach((pt,i)=>{
     if(pt.pair===k) out.push({w:pt.r_m||0.9, stc:state.portesEtat[i]??null});
   });
+  for(const pm of state.portes_man)
+    if(pairDePorteMan(pm)===p)
+      out.push({w:Math.hypot(pm.lx-pm.x,pm.ly-pm.y)/PT_PER_M||0.9, stc:pm.stc??null});
   return out;
 }
+// Surface opaque d'une cloison percée de portes. Ses segments viennent des pixels
+// de mur, où la baie ne figure pas : elle coupe le trait. L'imposte au-dessus de
+// la porte, elle, est du mur. Retirer la porte de longueur × hauteur la retirait
+// donc une seconde fois.
+function murOpaque(len, portes, H, HD){
+  let a=len*H;
+  for(const d of portes) a+=Math.max(0.1,d.w)*(H-HD);
+  return Math.max(0.01,a);
+}
+// Le panneau conseille « STC porte ≥ cible − 10 » ; le contrôle en est la
+// traduction. Une cloison n'est en défaut que si son composite tombe sous celui
+// qu'elle aurait avec toutes ses portes à ce plancher. Le comparer à la cible
+// elle-même condamnait toute porte plus faible que le mur, c'est-à-dire toutes.
+const ECART_PORTE=10;
 function compositePaire(p){
   const target=stcOf(p);
   const len=p.segments.reduce((a,s)=>a+s.len_m,0);
   const portes=portesDeLaPaire(p);
   const H=+(document.getElementById('hsp')||{}).value||2.7, HD=Math.min(H,2.1);
-  if(!portes.length || len<=0) return {target, comp:null, portes:0, unspec:0};
-  const wallArea=len*H; let doorArea=0, parts=[], unspec=0;
-  for(const d of portes){ const a=Math.max(0.1,d.w)*HD; doorArea+=a;
+  if(!portes.length || len<=0) return {target, comp:null, ref:null, bad:false, portes:0, unspec:0};
+  const mur={a:murOpaque(len,portes,H,HD), stc:target};
+  const parts=[mur], plancher=[mur]; let unspec=0;
+  for(const d of portes){ const a=Math.max(0.1,d.w)*HD;
+    plancher.push({a, stc:target-ECART_PORTE});
     if(d.stc==null) unspec++; else parts.push({a, stc:d.stc}); }
-  parts.push({a:Math.max(0.01, wallArea-doorArea), stc:target});
-  return {target, comp:unspec?null:composite(parts), portes:portes.length, unspec};
-}
-function noteComposite(p){
-  const cp=compositePaire(p);
-  if(!cp.portes) return '';
-  if(cp.unspec) return '<div style="color:#e67e22;margin:3px 0">❔ STC composite : porte non renseignée</div>';
-  const bad=cp.comp<cp.target-0.5;
-  return `<div style="color:${bad?'#c0392b':'#2e7d32'};margin:3px 0">`+
-    `${bad?'⚠':'✔'} STC composite estimé ≈ <b>${cp.comp}</b> (cible ${cp.target})</div>`;
+  const comp=unspec?null:composite(parts), ref=composite(plancher);
+  return {target, comp, ref, bad:comp!=null && comp<ref, portes:portes.length, unspec};
 }
 // ================== Calculateur STC composite (STCc) + abaque ==================
 // Abaque : Architectural Acoustics, M. David Egan, p.191.
@@ -5688,10 +5720,10 @@ function calcLoadPair(){
   const H=+(document.getElementById('hsp')||{}).value||2.7, HD=Math.min(H,2.1);
   const len=p.segments.reduce((a,s)=>a+s.len_m,0);
   const portes=portesDeLaPaire(p);
-  const rows=[]; let doorArea=0;
-  portes.forEach((d,i)=>{ const a=Math.max(0.1,d.w)*HD; doorArea+=a;
-    rows.push({name:'Porte '+(i+1), stc:(d.stc==null?target-10:d.stc), area:Math.round(a*100)/100}); });
-  rows.unshift({name:'Mur', stc:target, area:Math.round(Math.max(0.01,len*H-doorArea)*100)/100});
+  const rows=[];
+  portes.forEach((d,i)=>{ const a=Math.max(0.1,d.w)*HD;
+    rows.push({name:'Porte '+(i+1), stc:(d.stc==null?target-ECART_PORTE:d.stc), area:Math.round(a*100)/100}); });
+  rows.unshift({name:'Mur', stc:target, area:Math.round(murOpaque(len,portes,H,HD)*100)/100});
   calcState.rows=rows; calcState.unit='m2'; calcState.probe=null;
   calcState.pair={a:p.a, b:p.b, len:len, h:H, target:target};
   const r0=calcCompute(); if(r0) calcState.curve=Math.round(r0.pWeak*10)/10;
@@ -5719,11 +5751,11 @@ function calcRenderTable(){
     const col = faible ? '#f0a500' : colorOf(Math.min(60,Math.max(25,+row.stc||25)));
     h+='<tr class="'+(faible?'weak':'')+'">'+
       '<td><span class="dot" style="background:'+col+'"></span></td>'+
-      '<td><input class="t" value="'+String(row.name||'').replace(/"/g,'&quot;')+
+      '<td><input class="t" value="'+ech(row.name)+
         '" oninput="calcSet('+i+',\'name\',this.value)"></td>'+
-      '<td style="text-align:right"><input class="num n" type="number" step="0.01" value="'+row.area+
+      '<td style="text-align:right"><input class="num n" type="number" step="0.01" value="'+ech(row.area)+
         '" oninput="calcSet('+i+',\'area\',this.value)"></td>'+
-      '<td style="text-align:right"><input class="num s" type="number" value="'+row.stc+
+      '<td style="text-align:right"><input class="num s" type="number" value="'+ech(row.stc)+
         '" oninput="calcSet('+i+',\'stc\',this.value)"></td>'+
       '<td><div class="share'+(faible?' w':'')+'"><div class="bar"><span style="width:'+
         part.toFixed(1)+'%;background:'+col+'"></span></div><em>'+fr(part,1)+' %</em></div></td>'+
@@ -5964,7 +5996,7 @@ function cloisonRows(){
     if(len<=0) continue;
     const cp=compositePaire(p);
     rows.push({p, a:p.a+' ↔ '+p.b, cats:state.cats[p.ca]+' / '+state.cats[p.cb],
-      stc:stcOf(p), len, portes:p.portes||0,
+      stc:stcOf(p), len, portes:cp.portes, bad:cp.bad,
       comp: cp.portes ? (cp.unspec ? NaN : cp.comp) : null,
       statut: state.excluded[k]?'ignorée':(state.overrides[k]!=null?'forcée':'auto')});
   }
@@ -5996,7 +6028,7 @@ function majMetres(){
     `<th class="sorth" data-c="${c}" style="cursor:pointer">${lab}${col===c?(dir>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>';
   for(let i=0;i<rows.length;i++){ const r=rows[i];
     const compTxt=r.comp==null?'':(Number.isNaN(r.comp)?'porte ?':r.comp);
-    const bad=typeof r.comp==='number' && !Number.isNaN(r.comp) && r.comp<r.stc-0.5;
+    const bad=!!r.bad;
     const stcStyle=`background:${colorOf(r.stc)};color:#fff;border:0;border-radius:9px;`+
       `font-size:11px;padding:1px 3px;cursor:pointer`;
     let stcCell;
@@ -6011,8 +6043,8 @@ function majMetres(){
         `</select>`;
     }
     hh+=`<tr class="lrow" data-i="${i}" style="cursor:pointer">`+
-      `<td style="text-align:left">${r.a}</td>`+
-      `<td style="text-align:left;font-size:10px">${r.cats}</td>`+
+      `<td style="text-align:left">${ech(r.a)}</td>`+
+      `<td style="text-align:left;font-size:10px">${ech(r.cats)}</td>`+
       `<td>${stcCell}</td>`+
       `<td>${r.len}</td><td>${r.portes||''}</td>`+
       `<td style="color:${bad?'#c0392b':'inherit'};font-weight:${bad?'bold':'normal'}">${compTxt}</td>`+
@@ -6047,12 +6079,26 @@ function majMetres(){
     };
   });
 }
+// CSV pour un Excel réglé en français : point-virgule entre colonnes, virgule
+// décimale — « 12.5 » y devient une date ou du texte. Un nom lu sur le plan peut
+// porter un point-virgule, un guillemet ou un saut de ligne : on le cite. Et un
+// champ qui commence par « = », « + » ou « @ » serait pris pour une formule.
+function celluleCSV(v){
+  if(v==null) return '';
+  if(typeof v==='number') return Number.isFinite(v) ? String(v).replace('.',',') : '';
+  let t=String(v);
+  if(/^[=+@\t\r]/.test(t)) t="'"+t;
+  return /[;"\r\n]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t;
+}
+function texteCSV(rows){
+  return '﻿'+rows.map(r=>r.map(celluleCSV).join(';')).join('\r\n');
+}
 function expQtyCSV(){
   const q=quantitesParSTC(); let rows=[['Cible STC','Longueur (m)','Nb cloisons']], totMl=0, totN=0;
   for(const v of Object.keys(q).map(Number).sort((a,b)=>a-b)){
     rows.push([v, Math.round(q[v].ml*10)/10, q[v].n]); totMl+=q[v].ml; totN+=q[v].n; }
   rows.push(['Total', Math.round(totMl*10)/10, totN]);
-  dl('metre_cloisons_STC.csv','﻿'+rows.map(r=>r.join(';')).join('\r\n'),'text/csv');
+  dl('metre_cloisons_STC.csv',texteCSV(rows),'text/csv');
 }
 function majConformite(){
   const div=document.getElementById('conf'); if(!div||!state) return;
@@ -6062,9 +6108,9 @@ function majConformite(){
     if(r.unspec) items.push({p, bad:false,
       t:p.a+' ↔ '+p.b+' · porte non renseignée',
       d:'cible '+r.target+' — affecter un STC de porte'});
-    else if(r.comp!=null && r.comp < r.target-0.5) items.push({p, bad:true,
+    else if(r.bad) items.push({p, bad:true,
       t:p.a+' ↔ '+p.b+' · composite '+fr(r.comp,1),
-      d:'cible '+r.target+' — le maillon faible plafonne la cloison'});
+      d:'sous '+fr(r.ref,1)+', celui de portes à cible − '+ECART_PORTE+' (cible '+r.target+')'});
   }
   const cnt=document.getElementById('confcnt');
   const hd=document.getElementById('confhd');
@@ -6076,7 +6122,7 @@ function majConformite(){
     cnt.innerHTML='<span style="background:#2e7d52;color:#fff;border-radius:9px;padding:1px 8px;'+
       'font-size:11.5px;font-weight:700">0</span>';
     div.innerHTML='<div class="muted" style="color:var(--ok)">'+
-      'Aucune non-conformité : toutes les portes renseignées tiennent leur cible.</div>';
+      'Aucune non-conformité : toutes les portes renseignées tiennent la cible − '+ECART_PORTE+'.</div>';
     return;
   }
   hd.style.background='rgba(240,165,0,.10)';
@@ -6176,7 +6222,7 @@ function matrixTable(){
     for(let j=0;j<cats.length;j++){
       if(j<i){h+='<td></td>';continue;}
       const key=[cats[i],cats[j]].sort().join('|');
-      h+='<td><input value="'+(state.matrix[key]==null?'':state.matrix[key])+
+      h+='<td><input value="'+ech(state.matrix[key])+
          '" data-k="'+ech(key)+'"></td>';
     } h+='</tr>';
   }
@@ -6258,23 +6304,27 @@ async function enregistrer(nom, data, mime){
 }
 function dl(name,text,mime){ enregistrer(name, text, mime); }
 function expCSV(){
-  let rows=[['Piece A','Nom A','Cat A','Piece B','Nom B','Cat B','Cible STC','Longueur (m)','Portes','Statut']];
+  // « Cat. à confirmer » : le côté dont la catégorie vient d'un défaut ou d'un
+  // mot-clé mal lu — la liste « Catégorie à vérifier » de l'écran, dans le fichier.
+  let rows=[['Piece A','Nom A','Cat A','Piece B','Nom B','Cat B','Cible STC','Longueur (m)','Portes','Statut',
+             'Cat. à confirmer']];
   for(const p of P){ const k=pairKey(p);
     if(zoneSuppr(p.ca)||zoneSuppr(p.cb)) continue;
     const len=Math.round(p.segments.reduce((a,s)=>a+s.len_m,0)*10)/10;
+    const doute=[catDouteuse(p.ca)?'A':'', catDouteuse(p.cb)?'B':''].filter(x=>x).join('+');
     rows.push([p.a,p.name_a,state.cats[p.ca],p.b,p.name_b,state.cats[p.cb],stcOf(p),len,
-      p.portes||0,
-      state.excluded[k]?'ignoree':(state.overrides[k]!=null?'forcee':'auto')]); }
+      portesDeLaPaire(p).length,
+      state.excluded[k]?'ignoree':(state.overrides[k]!=null?'forcee':'auto'), doute]); }
   for(const m of state.manual)
-    rows.push(['-','Cloison manuelle','','-','','',m.stc,m.len_m,'','manuelle']);
+    rows.push(['-','Cloison manuelle','','-','','',m.stc,m.len_m,'','manuelle','']);
   (D.portes||[]).forEach((pt,i)=>{
     if(state.portesEtat[i]!=null)
-      rows.push(['-','Porte détectée','','-','','',state.portesEtat[i],pt.r_m,'','porte']);
+      rows.push(['-','Porte détectée','','-','','',state.portesEtat[i],pt.r_m,'','porte','']);
   });
   for(const pm of state.portes_man)
     rows.push(['-','Porte manuelle','','-','','',pm.stc,
-      Math.round(Math.hypot(pm.lx-pm.x,pm.ly-pm.y)/PT_PER_M*100)/100,'','porte']);
-  dl('cibles_STC_valide.csv','﻿'+rows.map(r=>r.join(';')).join('\r\n'),'text/csv');
+      Math.round(Math.hypot(pm.lx-pm.x,pm.ly-pm.y)/PT_PER_M*100)/100,'','porte','']);
+  dl('cibles_STC_valide.csv',texteCSV(rows),'text/csv');
 }
 // ================== exporter la vérité terrain ==================
 // Le banc `tests/verite.mjs` mesure le moteur contre une liste de locaux relevée
